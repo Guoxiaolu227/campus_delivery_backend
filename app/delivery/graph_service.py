@@ -153,6 +153,41 @@ class GraphService:
         except nx.NetworkXNoPath:
             return []
 
+    def find_nearest_node_info(self, lat, lon):
+        """
+        ★ 阶段1新增：根据经纬度查找最近的路网节点
+
+        用途：用户在地图上点击时，返回最近节点的编号和坐标
+        """
+        import math
+
+        node_list = self.get_node_list()
+        positions = self.get_node_positions()
+
+        min_d = float('inf')
+        result = None
+
+        for i, node in enumerate(node_list):
+            pos = positions[node]
+            R = 6371000
+            p1, p2 = math.radians(lat), math.radians(pos['lat'])
+            dp = math.radians(pos['lat'] - lat)
+            dl = math.radians(pos['lon'] - lon)
+            a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+            d = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+            if d < min_d:
+                min_d = d
+                result = {
+                    'node_id': int(node),
+                    'node_index': i + 1,
+                    'lat': pos['lat'],
+                    'lon': pos['lon'],
+                    'distance': round(d, 2)
+                }
+
+        return result
+
 
 # ★ 创建全局单例实例，其他模块直接导入使用
 graph_service = GraphService()

@@ -28,4 +28,87 @@ class Config:
     SCHOOL_CENTER_LON = 114.32819      # 武汉理工大学中心经度
     SCHOOL_NAME = "Wuhan University of Technology"
     CAMPUS_RADIUS = 400                # 校园覆盖半径（米）
-    CANTEEN_NODE_ID = 10               # 食堂节点编号（从1开始）
+    CANTEEN_NODE_ID = 19               # ★ 嘉慧园食堂节点编号（从1开始）
+
+    # ===== ★ 阶段1新增：校园 POI 预设数据 =====
+    # 说明：
+    #   - node_index 是路网节点编号（1-based），启动后可通过地图点击确认
+    #   - poi_type 类型说明：
+    #       canteen   = 食堂/配送中心（固定1个，即嘉慧园）
+    #       dormitory = 宿舍楼
+    #       teaching  = 教学楼/学院
+    #       library   = 图书馆
+    #       sports    = 体育场馆
+    #       other     = 其他可配送地点
+    #   - 你可以随时通过前端"添加地点"功能补充更多
+    #   - node_index 的值需要根据实际路网调整（启动后在地图上点击查看）
+    CAMPUS_POIS = [
+        # ===== 食堂 & 配送中心（固定1个）=====
+        {
+            'name': '嘉慧园食堂',
+            'poi_type': 'canteen',
+            'node_index': 19,
+            'description': '食堂 & 配送中心（所有订单的起点）',
+            'capacity': 500
+        },
+        # ===== 宿舍楼 =====
+        {
+            'name': '东苑1栋宿舍',
+            'poi_type': 'dormitory',
+            'node_index': 5,
+            'description': '东区学生宿舍',
+            'capacity': 400
+        },
+        {
+            'name': '东苑2栋宿舍',
+            'poi_type': 'dormitory',
+            'node_index': 8,
+            'description': '东区学生宿舍',
+            'capacity': 400
+        },
+        {
+            'name': '西苑1栋宿舍',
+            'poi_type': 'dormitory',
+            'node_index': 25,
+            'description': '西区学生宿舍',
+            'capacity': 350
+        },
+        {
+            'name': '南苑1栋宿舍',
+            'poi_type': 'dormitory',
+            'node_index': 35,
+            'description': '南区学生宿舍',
+            'capacity': 300
+        },
+        # ===== 教学楼 / 学院 =====
+        {
+            'name': '理学院楼',
+            'poi_type': 'teaching',
+            'node_index': 12,
+            'description': '理学院教学楼',
+            'capacity': 0
+        },
+        {
+            'name': '计算机学院楼',
+            'poi_type': 'teaching',
+            'node_index': 30,
+            'description': '计算机科学与技术学院',
+            'capacity': 0
+        },
+        # ===== 图书馆 =====
+        {
+            'name': '图书馆',
+            'poi_type': 'library',
+            'node_index': 15,
+            'description': '校图书馆',
+            'capacity': 0
+        },
+        # ===== 体育场馆 =====
+        {
+            'name': '体育馆',
+            'poi_type': 'sports',
+            'node_index': 40,
+            'description': '校体育馆',
+            'capacity': 0
+        },
+    ]

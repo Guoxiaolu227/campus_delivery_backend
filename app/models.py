@@ -107,3 +107,53 @@ class DeliveryResult(db.Model):
             'courier_assignments': self.courier_assignments,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
         }
+
+# ================================================================
+# ★ 阶段1新增：POI（校园兴趣点）模型
+# ================================================================
+
+class POI(db.Model):
+    """
+    校园兴趣点（Point of Interest）表
+
+    作用：
+      给路网节点赋予"身份"。路网只知道"节点19在坐标(30.58, 114.33)"，
+      POI表告诉系统"节点19是嘉慧园食堂"。
+
+    类型（poi_type）说明：
+      canteen   — 食堂/配送中心（固定1个：嘉慧园）
+      dormitory — 宿舍楼
+      teaching  — 教学楼/学院
+      library   — 图书馆
+      sports    — 体育场馆
+      other     — 其他可配送地点
+
+    与路网的关系：
+      node_index 是该POI在路网节点列表中的编号（1-based），
+      通过 node_list[node_index - 1] 可以得到 OSMnx 的真实节点ID。
+    """
+    __tablename__ = 'pois'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(100), nullable=False, comment='地点名称')
+    poi_type = db.Column(db.String(20), nullable=False, comment='地点类型')
+    node_index = db.Column(db.Integer, nullable=False, comment='路网节点编号(1-based)')
+    lat = db.Column(db.Float, nullable=False, default=0.0, comment='纬度')
+    lon = db.Column(db.Float, nullable=False, default=0.0, comment='经度')
+    description = db.Column(db.String(200), default='', comment='描述')
+    capacity = db.Column(db.Integer, default=0, comment='容量')
+    is_active = db.Column(db.Boolean, default=True, comment='是否启用')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'poi_type': self.poi_type,
+            'node_index': self.node_index,
+            'lat': self.lat,
+            'lon': self.lon,
+            'description': self.description,
+            'capacity': self.capacity,
+            'is_active': self.is_active
+        }

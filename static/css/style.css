@@ -181,3 +181,83 @@ body {
     margin-bottom: 10px;
     color: #555;
 }
+
+
+/* ================================================================
+   ★ 阶段1新增：POI 管理相关样式
+   ================================================================ */
+
+.btn-group-h {
+    display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.btn-sm {
+    padding: 6px 10px; font-size: 12px;
+}
+.btn-purple { background: #9B59B6; color: white; }
+.btn-teal   { background: #1ABC9C; color: white; }
+
+/* POI 统计 */
+.poi-stats {
+    display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap;
+}
+.poi-stats .tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: #f0f0f0;
+}
+
+/* POI 列表 */
+.poi-list {
+    max-height: 180px; overflow-y: auto; margin: 6px 0;
+}
+.poi-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 5px 8px; margin-bottom: 3px; border-radius: 6px;
+    font-size: 12px; background: white; border-left: 3px solid #ccc;
+    transition: all 0.15s;
+}
+.poi-item:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.1); transform: translateX(2px); }
+.poi-item.canteen   { border-left-color: #F39C12; }
+.poi-item.dormitory { border-left-color: #3498DB; }
+.poi-item.teaching  { border-left-color: #9B59B6; }
+.poi-item.library   { border-left-color: #E67E22; }
+.poi-item.sports    { border-left-color: #27AE60; }
+.poi-item.other     { border-left-color: #95A5A6; }
+.poi-name { font-weight: bold; }
+.poi-meta { color: #888; font-size: 11px; }
+.poi-actions button {
+    border: none; background: none; cursor: pointer; font-size: 14px;
+    padding: 2px 4px; border-radius: 4px;
+}
+.poi-actions button:hover { background: #f0f0f0; }
+
+/* 添加表单 */
+.add-poi-details { margin-top: 8px; }
+.add-poi-details summary {
+    cursor: pointer; font-size: 13px; font-weight: bold; color: #667eea;
+}
+.add-poi-form {
+    padding: 10px; background: white; border-radius: 8px; margin-top: 6px;
+}
+.add-poi-form label {
+    display: block; margin-bottom: 5px; font-size: 12px;
+}
+.add-poi-form input, .add-poi-form select {
+    width: 100%; padding: 4px 8px; border: 1px solid #ddd;
+    border-radius: 4px; font-size: 12px; margin-top: 2px; box-sizing: border-box;
+}
+.add-poi-form .hint { font-size: 11px; color: #888; margin: 6px 0 2px; }
+.coord-row { display: flex; gap: 8px; }
+.coord-row label { flex: 1; }
+
+/* 地图提示 */
+.map-hint {
+    background: #FEF9E7; border: 1px solid #F9E79F; border-radius: 8px;
+    padding: 8px 15px; font-size: 13px; margin-bottom: 8px;
+}
+
+/* 图例 */
+.map-legend {
+    display: flex; gap: 15px; padding: 10px 15px; background: white;
+    border-radius: 8px; margin-top: 8px; font-size: 13px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); flex-wrap: wrap;
+}

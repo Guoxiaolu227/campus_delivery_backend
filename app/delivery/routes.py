@@ -15,6 +15,7 @@ from app.delivery import bp
 from app.delivery.graph_service import graph_service
 from app.delivery.order_service import order_service
 from app.delivery.ga_optimizer import GeneticAlgorithmTSPWith2Opt
+from app.delivery.poi_service import poi_service
 
 
 @bp.route('/graph_info', methods=['GET'])
@@ -254,4 +255,122 @@ def optimize_route():
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ================================================================
+# ★ 阶段1新增：POI 管理 + 地图交互 API
+# ================================================================
+
+@bp.route('/pois', methods=['GET'])
+def get_pois():
+    """
+    获取 POI 列表
+
+    查询参数:
+      type — 筛选类型（canteen/dormitory/teaching/library/sports/other）
+      all  — "true" 则包含已禁用的
+
+    示例: GET /delivery/pois?type=dormitory
+    """
+    try:
+        poi_type = request.args.get('type', None)
+        active_only = request.args.get('all', 'false') != 'true'
+        pois = poi_service.get_all_pois(poi_type=poi_type, active_only=active_only)
+
+        # 按类型统计数量
+        stats = {}
+        for p in pois:
+            t = p['poi_type']
+            stats[t] = stats.get(t, 0) + 1
+
+        return jsonify({
+            'success': True,
+            'data': {'pois': pois, 'total': len(pois), 'stats': stats}
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/pois', methods=['POST'])
+def create_poi():
+    """
+    创建新 POI
+
+    请求 JSON:
+      {"name": "新教学楼", "poi_type": "teaching", "node_index": 28, "description": "..."}
+    或:
+      {"name": "新教学楼", "poi_type": "teaching", "lat": 30.58, "lon": 114.33}
+    """
+    try:
+        data = request.get_json()
+        poi = poi_service.create_poi(
+            name=data['name'],
+            poi_type=data['poi_type'],
+            node_index=data.get('node_index'),
+            lat=data.get('lat'),
+            lon=data.get('lon'),
+            description=data.get('description', ''),
+            capacity=data.get('capacity', 0)
+        )
+        return jsonify({'success': True, 'data': poi})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/pois/<int:poi_id>', methods=['PUT'])
+def update_poi(poi_id):
+    """更新 POI（只传需要改的字段）"""
+    try:
+        data = request.get_json()
+        poi = poi_service.update_poi(poi_id, **data)
+        return jsonify({'success': True, 'data': poi})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/pois/<int:poi_id>', methods=['DELETE'])
+def delete_poi(poi_id):
+    """删除（禁用）POI"""
+    try:
+        result = poi_service.delete_poi(poi_id)
+        return jsonify({'success': True, 'data': result})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/pois/init', methods=['POST'])
+def init_pois():
+    """从 config.py 预设数据初始化 POI"""
+    try:
+        added = poi_service.init_pois()
+        pois = poi_service.get_all_pois()
+        return jsonify({
+            'success': True,
+            'data': {'pois': pois, 'total': len(pois), 'added': added}
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/nearest_node', methods=['GET'])
+def find_nearest_node():
+    """
+    查找最近路网节点（地图点击时调用）
+
+    查询参数: lat, lon
+    示例: GET /delivery/nearest_node?lat=30.5798&lon=114.3282
+    """
+    try:
+        lat = float(request.args.get('lat'))
+        lon = float(request.args.get('lon'))
+        result = graph_service.find_nearest_node_info(lat, lon)
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
