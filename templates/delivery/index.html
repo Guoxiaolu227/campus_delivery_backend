@@ -1,14 +1,12 @@
 {% extends "base.html" %}
-
 {% block title %}校园外卖配送系统 - 路径优化{% endblock %}
 
 {% block content %}
 <div class="dashboard">
-    <!-- ===== 左侧：控制面板 ===== -->
     <div class="control-panel">
         <h2>⚙️ 控制面板</h2>
 
-        <!-- ★ 阶段1新增：地图与地点管理 -->
+        <!-- 地图与地点管理（阶段1，不变） -->
         <div class="param-group">
             <h3>🗺️ 地图与地点管理</h3>
             <div class="btn-group-h">
@@ -16,14 +14,8 @@
                 <button class="btn btn-purple btn-sm" onclick="initPOIs()">🏗️ 初始化地点</button>
                 <button class="btn btn-teal btn-sm" onclick="loadPOIs()">🔄 刷新</button>
             </div>
-
-            <!-- POI 统计徽标 -->
             <div id="poiStats" class="poi-stats" style="display:none;"></div>
-
-            <!-- POI 列表 -->
             <div id="poiList" class="poi-list"></div>
-
-            <!-- 添加新地点（折叠） -->
             <details class="add-poi-details">
                 <summary>➕ 添加新地点</summary>
                 <div class="add-poi-form">
@@ -38,90 +30,98 @@
                         </select>
                     </label>
                     <label>描述: <input type="text" id="poiDesc" placeholder="可选"></label>
-                    <p class="hint">💡 在地图上<b>点击</b>选择位置，节点编号会自动填入：</p>
+                    <p class="hint">💡 在地图上<b>点击</b>选择位置：</p>
                     <label>节点编号: <input type="number" id="poiNodeIndex" placeholder="点击地图自动填入" min="1"></label>
                     <div class="coord-row">
                         <label>纬度: <input type="text" id="poiLat" placeholder="—" readonly></label>
                         <label>经度: <input type="text" id="poiLon" placeholder="—" readonly></label>
                     </div>
-                    <button class="btn btn-success btn-sm" onclick="createPOI()" style="width:100%;margin-top:6px;">
-                        ✅ 确认添加
-                    </button>
+                    <button class="btn btn-success btn-sm" onclick="createPOI()" style="width:100%;margin-top:6px;">✅ 确认添加</button>
                 </div>
             </details>
         </div>
 
-        <!-- 业务参数（原有） -->
+        <!-- ★ 阶段2新增：下单 -->
         <div class="param-group">
-            <h3>📦 业务参数</h3>
-            <label>订单数量:
-                <input type="number" id="numOrders" value="40" min="1" max="100">
+            <h3>📝 下单</h3>
+            <label>配送目的地:
+                <select id="orderDest" style="width:100%;padding:5px;font-size:12px;border:1px solid #ddd;border-radius:4px;margin-top:3px;">
+                    <option value="">-- 加载地点后选择 --</option>
+                </select>
             </label>
-            <label>骑手数量:
-                <input type="number" id="numCouriers" value="4" min="1" max="10">
-            </label>
+            <p class="hint">💡 选择已知地点，或在地图上点击后手动下单</p>
+            <label>节点编号(地图点击): <input type="number" id="orderNodeIndex" placeholder="可选" min="1"></label>
+            <div class="btn-group-h" style="margin-top:8px;">
+                <button class="btn btn-success btn-sm" onclick="createOrder()">🛒 手动下单</button>
+                <button class="btn btn-warning btn-sm" onclick="randomOrders()">🎲 随机下单</button>
+            </div>
+            <label style="margin-top:4px;">随机数量: <input type="number" id="numRandomOrders" value="10" min="1" max="50" style="width:60px;float:right;"></label>
         </div>
 
-        <!-- GA 算法参数（原有） -->
+        <!-- ★ 阶段2新增：订单列表 -->
         <div class="param-group">
-            <h3>🧬 算法参数</h3>
-            <label>种群大小:
-                <input type="number" id="popSize" value="200" min="10" max="1000">
-            </label>
-            <label>进化代数:
-                <input type="number" id="generations" value="500" min="10" max="2000">
-            </label>
-            <label>变异率:
-                <input type="number" id="mutRate" value="0.2" min="0" max="1" step="0.05">
-            </label>
-            <label>交叉率:
-                <input type="number" id="crossRate" value="0.8" min="0" max="1" step="0.05">
-            </label>
-            <label>
-                <input type="checkbox" id="use2opt" checked> 启用 2-opt 局部搜索
-            </label>
+            <h3>📋 订单列表 <span id="pendingBadge" class="pending-badge" style="display:none;">0</span></h3>
+            <div class="btn-group-h">
+                <button class="btn btn-teal btn-sm" onclick="loadOrders()">🔄 刷新订单</button>
+                <select id="orderFilter" onchange="loadOrders()" style="padding:4px;font-size:12px;border:1px solid #ddd;border-radius:4px;">
+                    <option value="">全部</option>
+                    <option value="pending">⏳ 待接单</option>
+                    <option value="accepted">✅ 已接单</option>
+                    <option value="delivering">🚴 配送中</option>
+                    <option value="delivered">📦 已送达</option>
+                </select>
+            </div>
+            <div id="orderList" class="order-list">
+                <p style="font-size:12px;color:#888;">暂无订单</p>
+            </div>
         </div>
 
-        <!-- 操作按钮（原有） -->
+        <!-- 算法参数 -->
+        <div class="param-group">
+            <h3>🧬 优化参数</h3>
+            <label>骑手数量: <input type="number" id="numCouriers" value="4" min="1" max="10"></label>
+            <label>种群大小: <input type="number" id="popSize" value="200" min="10" max="1000"></label>
+            <label>进化代数: <input type="number" id="generations" value="500" min="10" max="2000"></label>
+            <label>变异率: <input type="number" id="mutRate" value="0.2" min="0" max="1" step="0.05"></label>
+            <label>交叉率: <input type="number" id="crossRate" value="0.8" min="0" max="1" step="0.05"></label>
+            <label><input type="checkbox" id="use2opt" checked> 启用 2-opt</label>
+        </div>
+
+        <!-- 操作按钮 -->
         <div class="btn-group">
-            <button id="btnGenOrders" class="btn btn-warning" onclick="generateOrders()">
-                📝 生成订单
-            </button>
-            <button id="btnOptimize" class="btn btn-success" onclick="runOptimize()">
-                🚀 开始优化
-            </button>
+            <button id="btnOptimize" class="btn btn-success" onclick="runOptimize()">🚀 优化 pending 订单</button>
         </div>
 
-        <!-- 状态信息（原有） -->
+        <!-- ★ 阶段2新增：配送模拟 -->
+        <div id="batchPanel" class="param-group" style="display:none;">
+            <h3>🚚 配送模拟（批次 #<span id="currentBatchId"></span>）</h3>
+            <div class="btn-group-h">
+                <button class="btn btn-sm btn-info" onclick="batchAdvance('picked_up')">🍽️ 全部取餐</button>
+                <button class="btn btn-sm btn-warning" onclick="batchAdvance('delivering')">🚴 全部出发</button>
+                <button class="btn btn-sm btn-success" onclick="batchAdvance('delivered')">📦 全部送达</button>
+            </div>
+        </div>
+
         <div id="statusPanel" class="status-panel">
-            <p>👆 先「加载路网」→ 再「初始化地点」</p>
+            <p>👆 先「加载路网」→「初始化地点」→ 再下单</p>
         </div>
 
-        <!-- 骑手分配结果（原有） -->
         <div id="courierPanel" class="courier-panel" style="display:none;">
             <h3>🚴 骑手分配结果</h3>
             <div id="courierList"></div>
         </div>
     </div>
 
-    <!-- ===== 右侧：地图和图表 ===== -->
     <div class="map-area">
         <div id="mapHint" class="map-hint">
-            💡 点击地图可查看最近节点编号，添加地点时会自动填入坐标
+            💡 点击地图查看节点编号，可用于下单或添加地点
         </div>
         <div id="map" style="height: 550px; border-radius: 10px;"></div>
-
-        <!-- ★ 阶段1新增：地图图例 -->
         <div class="map-legend">
-            <span>🍽️ 食堂</span>
-            <span>🏠 宿舍</span>
-            <span>🏫 教学楼</span>
-            <span>📚 图书馆</span>
-            <span>🏀 体育馆</span>
-            <span>📍 其他</span>
+            <span>🍽️ 食堂</span> <span>🏠 宿舍</span> <span>🏫 教学楼</span>
+            <span>📚 图书馆</span> <span>🏀 体育馆</span> <span>📍 其他</span>
+            <span>🔴 订单</span>
         </div>
-
-        <!-- 收敛曲线（原有） -->
         <div class="chart-area" style="display:none;" id="chartContainer">
             <h3>📈 GA 收敛曲线</h3>
             <canvas id="convergenceChart" height="200"></canvas>

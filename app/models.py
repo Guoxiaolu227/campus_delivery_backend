@@ -1,69 +1,179 @@
-# Models go here
 """
 数据库模型
-- 定义所有数据表的结构
-- Order: 订单表（核心）
-- Courier: 骑手表
-- DeliveryResult: 优化结果表
+★ 阶段2重写：订单系统化
+
+核心变化：
+  - Order 表：新增完整状态机（5种状态 + 5个时间戳）
+  - Batch 表：新增配送批次，每次优化 = 一个批次
+  - Courier 表：保留，小幅调整
+  - POI 表：不变
 """
 
 from datetime import datetime
 from app.extensions import db
 
 
+# ================================================================
+# 订单状态常量（状态机）
+# ================================================================
+# 为什么用常量而不是硬编码字符串？
+# 1. 防拼写错误：写错 "pendng" 不会报错，但 ORDER_PENDING 未定义会立刻报错
+# 2. 方便全局搜索：Ctrl+F 搜 ORDER_PENDING 能找到所有使用的地方
+# 3. 后续可以加中文描述映射
+
+ORDER_PENDING = 'pending'         # 待接单：用户刚下的单，还没被纳入任何批次
+ORDER_ACCEPTED = 'accepted'       # 已接单：已被纳入某个批次，分配了骑手
+ORDER_PICKED_UP = 'picked_up'     # 已取餐：骑手到达食堂取了餐
+ORDER_DELIVERING = 'delivering'   # 配送中：骑手出发配送
+ORDER_DELIVERED = 'delivered'     # 已送达：骑手到达目的地
+
+# 状态流转规则：当前状态 → 允许转到的下一状态
+STATUS_TRANSITIONS = {
+    ORDER_PENDING:    [ORDER_ACCEPTED],
+    ORDER_ACCEPTED:   [ORDER_PICKED_UP],
+    ORDER_PICKED_UP:  [ORDER_DELIVERING],
+    ORDER_DELIVERING: [ORDER_DELIVERED],
+    ORDER_DELIVERED:  []  # 终态，不能再转
+}
+
+# 状态中文映射（前端展示用）
+STATUS_LABELS = {
+    ORDER_PENDING:    '⏳ 待接单',
+    ORDER_ACCEPTED:   '✅ 已接单',
+    ORDER_PICKED_UP:  '🍽️ 已取餐',
+    ORDER_DELIVERING: '🚴 配送中',
+    ORDER_DELIVERED:  '📦 已送达'
+}
+
+
 class Order(db.Model):
     """
-    订单表
-    每条记录代表一个外卖订单
+    订单表（★ 阶段2重写）
+
+    每条记录 = 一个外卖订单
+
+    与旧版的区别：
+      旧版：只有 node_id + status，从未被真正使用
+      新版：
+        - 关联 POI（from_poi_id=食堂, to_poi_id=目的地）
+        - 完整状态机（5种状态 + 5个时间戳）
+        - 归属批次（batch_id，哪一批优化处理的）
+        - 归属骑手（courier_id，分配给谁）
+
+    关于 node_index：
+      直接存目的地的路网节点编号（1-based），这样优化算法可以直接使用，
+      不需要每次都去 POI 表查。
     """
     __tablename__ = 'orders'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
 
-    # 订单对应的路网节点编号（1-based，对应 node_list 中的位置）
-    node_id = db.Column(db.Integer, nullable=False, comment='路网节点编号')
+    # --- 位置信息 ---
+    from_poi_id = db.Column(db.Integer, db.ForeignKey('pois.id'),
+                            nullable=True, comment='取餐地点(食堂) POI ID')
+    to_poi_id = db.Column(db.Integer, db.ForeignKey('pois.id'),
+                          nullable=True, comment='送达地点 POI ID')
+    to_node_index = db.Column(db.Integer, nullable=False,
+                              comment='目的地路网节点编号(1-based)')
+    address = db.Column(db.String(200), default='', comment='目的地描述文字')
 
-    # 配送地址的文字描述（方便前端展示）
-    address = db.Column(db.String(200), default='', comment='配送地址描述')
+    # --- 状态 ---
+    status = db.Column(db.String(20), default=ORDER_PENDING, comment='订单状态')
 
-    # 订单状态：pending=待配送, assigned=已分配, delivered=已送达
-    status = db.Column(db.String(20), default='pending', comment='订单状态')
-
-    # 分配给哪个骑手（外键关联 couriers 表）
+    # --- 关联 ---
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.id'),
+                         nullable=True, comment='所属批次ID')
     courier_id = db.Column(db.Integer, db.ForeignKey('couriers.id'),
                            nullable=True, comment='分配的骑手ID')
 
-    # 创建时间
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # --- 时间戳（每个状态变化记录时间，用于统计配送耗时）---
+    created_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           comment='下单时间')
+    accepted_at = db.Column(db.DateTime, nullable=True,
+                            comment='接单时间')
+    picked_up_at = db.Column(db.DateTime, nullable=True,
+                             comment='取餐时间')
+    delivering_at = db.Column(db.DateTime, nullable=True,
+                              comment='出发配送时间')
+    delivered_at = db.Column(db.DateTime, nullable=True,
+                             comment='送达时间')
+
+    # --- 关系（方便反向查询）---
+    from_poi = db.relationship('POI', foreign_keys=[from_poi_id])
+    to_poi = db.relationship('POI', foreign_keys=[to_poi_id])
 
     def to_dict(self):
-        """转换为字典，方便 JSON 序列化返回给前端"""
+        """转为字典，方便 JSON 返回前端"""
         return {
             'id': self.id,
-            'node_id': self.node_id,
+            'from_poi_id': self.from_poi_id,
+            'from_poi_name': self.from_poi.name if self.from_poi else '嘉慧园食堂',
+            'to_poi_id': self.to_poi_id,
+            'to_poi_name': self.to_poi.name if self.to_poi else '',
+            'to_node_index': self.to_node_index,
             'address': self.address,
             'status': self.status,
+            'status_label': STATUS_LABELS.get(self.status, self.status),
+            'batch_id': self.batch_id,
             'courier_id': self.courier_id,
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            'created_at': self.created_at.strftime('%H:%M:%S') if self.created_at else '',
+            'accepted_at': self.accepted_at.strftime('%H:%M:%S') if self.accepted_at else '',
+            'delivered_at': self.delivered_at.strftime('%H:%M:%S') if self.delivered_at else '',
+        }
+
+
+class Batch(db.Model):
+    """
+    配送批次表（★ 阶段2新增）
+
+    作用：
+      每次点击"开始优化"时，把当前所有 pending 订单打包成一个批次。
+      一个批次 = 一次 GA 优化运算 = 一组骑手路线方案。
+
+    为什么需要批次？
+      1. 历史可追溯：第1批10单、第2批8单，各自的路线方案互不干扰
+      2. 为动态调度奠定基础：新订单进入下一个批次
+      3. 支持"再次优化"：同一批次可以用不同参数重新计算
+
+    字段说明：
+      - order_count: 这批有多少单
+      - total_distance: GA 优化后的最优总距离
+      - courier_count: 参与配送的骑手数
+      - optimal_route_json: 完整优化结果（JSON），包含路线和骑手分配
+      - ga_params_json: 本次使用的 GA 参数快照
+    """
+    __tablename__ = 'batches'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    order_count = db.Column(db.Integer, default=0, comment='订单数')
+    courier_count = db.Column(db.Integer, default=0, comment='骑手数')
+    total_distance = db.Column(db.Float, default=0.0, comment='最优总距离(米)')
+    status = db.Column(db.String(20), default='optimized', comment='批次状态')
+    optimal_route_json = db.Column(db.Text, default='', comment='优化结果JSON')
+    ga_params_json = db.Column(db.Text, default='', comment='算法参数JSON')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # 关联的订单
+    orders = db.relationship('Order', backref='batch', lazy='dynamic')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'order_count': self.order_count,
+            'courier_count': self.courier_count,
+            'total_distance': self.total_distance,
+            'status': self.status,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
         }
 
 
 class Courier(db.Model):
-    """
-    骑手表
-    每条记录代表一个配送骑手
-    """
+    """骑手表（保留，小幅调整）"""
     __tablename__ = 'couriers'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-
-    # 骑手名称
     name = db.Column(db.String(50), nullable=False, comment='骑手名称')
-
-    # 骑手状态：available=空闲, busy=配送中
     status = db.Column(db.String(20), default='available', comment='骑手状态')
-
-    # 关联的订单（一个骑手可以有多个订单）
     orders = db.relationship('Order', backref='courier', lazy='dynamic')
 
     def to_dict(self):
@@ -76,27 +186,14 @@ class Courier(db.Model):
 
 
 class DeliveryResult(db.Model):
-    """
-    配送优化结果表
-    每次运行 GA 优化后，把结果保存在这里
-    """
+    """配送优化结果表（保留，后续可和 Batch 关联）"""
     __tablename__ = 'delivery_results'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-
-    # 最优总距离（米）
     total_distance = db.Column(db.Float, comment='最优总距离')
-
-    # 最优路线顺序（JSON 字符串存储）
     optimal_route = db.Column(db.Text, comment='最优路线JSON')
-
-    # 骑手分配方案（JSON 字符串存储）
     courier_assignments = db.Column(db.Text, comment='骑手分配方案JSON')
-
-    # GA 算法参数快照
     ga_params = db.Column(db.Text, comment='算法参数JSON')
-
-    # 创建时间
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -108,30 +205,12 @@ class DeliveryResult(db.Model):
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
         }
 
+
 # ================================================================
-# ★ 阶段1新增：POI（校园兴趣点）模型
+# POI 表（阶段1已有，完全不改）
 # ================================================================
 
 class POI(db.Model):
-    """
-    校园兴趣点（Point of Interest）表
-
-    作用：
-      给路网节点赋予"身份"。路网只知道"节点19在坐标(30.58, 114.33)"，
-      POI表告诉系统"节点19是嘉慧园食堂"。
-
-    类型（poi_type）说明：
-      canteen   — 食堂/配送中心（固定1个：嘉慧园）
-      dormitory — 宿舍楼
-      teaching  — 教学楼/学院
-      library   — 图书馆
-      sports    — 体育场馆
-      other     — 其他可配送地点
-
-    与路网的关系：
-      node_index 是该POI在路网节点列表中的编号（1-based），
-      通过 node_list[node_index - 1] 可以得到 OSMnx 的真实节点ID。
-    """
     __tablename__ = 'pois'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

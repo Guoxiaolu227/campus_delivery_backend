@@ -261,3 +261,45 @@ body {
     border-radius: 8px; margin-top: 8px; font-size: 13px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.08); flex-wrap: wrap;
 }
+
+
+/* ================================================================
+   ★ 阶段2新增：订单管理相关样式
+   ================================================================ */
+
+/* 待处理数量徽标 */
+.pending-badge {
+    background: #E74C3C; color: white; font-size: 11px;
+    padding: 1px 7px; border-radius: 10px; margin-left: 6px;
+    font-weight: bold;
+}
+
+/* 订单列表 */
+.order-list {
+    max-height: 220px; overflow-y: auto; margin: 6px 0;
+}
+.order-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 8px; margin-bottom: 3px; border-radius: 6px;
+    font-size: 12px; background: white; border-left: 3px solid #ccc;
+    transition: all 0.15s;
+}
+.order-item:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+.order-item.pending    { border-left-color: #F39C12; }
+.order-item.accepted   { border-left-color: #3498DB; }
+.order-item.picked_up  { border-left-color: #9B59B6; }
+.order-item.delivering { border-left-color: #E67E22; }
+.order-item.delivered  { border-left-color: #27AE60; }
+
+.order-info { flex: 1; }
+.order-id { font-weight: bold; }
+.order-dest { color: #555; font-size: 11px; }
+.order-status {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    white-space: nowrap;
+}
+.order-status.pending    { background: #FEF3E2; color: #D68910; }
+.order-status.accepted   { background: #EBF5FB; color: #2980B9; }
+.order-status.picked_up  { background: #F4ECF7; color: #7D3C98; }
+.order-status.delivering { background: #FDEBD0; color: #CA6F1E; }
+.order-status.delivered  { background: #E8F8F5; color: #1E8449; }
