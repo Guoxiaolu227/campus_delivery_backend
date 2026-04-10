@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}校园外卖配送系统 - 路径优化{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- ===== 左侧：控制面板 ===== -->
+    <div class="control-panel">
+        <h2>⚙️ 参数配置</h2>
+
+        <!-- 业务参数 -->
+        <div class="param-group">
+            <h3>📦 业务参数</h3>
+            <label>订单数量:
+                <input type="number" id="numOrders" value="40" min="1" max="100">
+            </label>
+            <label>骑手数量:
+                <input type="number" id="numCouriers" value="4" min="1" max="10">
+            </label>
+        </div>
+
+        <!-- GA 算法参数 -->
+        <div class="param-group">
+            <h3>🧬 算法参数</h3>
+            <label>种群大小:
+                <input type="number" id="popSize" value="200" min="10" max="1000">
+            </label>
+            <label>进化代数:
+                <input type="number" id="generations" value="500" min="10" max="2000">
+            </label>
+            <label>变异率:
+                <input type="number" id="mutRate" value="0.2" min="0" max="1" step="0.05">
+            </label>
+            <label>交叉率:
+                <input type="number" id="crossRate" value="0.8" min="0" max="1" step="0.05">
+            </label>
+            <label>
+                <input type="checkbox" id="use2opt" checked> 启用 2-opt 局部搜索
+            </label>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="btn-group">
+            <button id="btnLoadGraph" class="btn btn-info" onclick="loadGraphInfo()">
+                📡 加载路网
+            </button>
+            <button id="btnGenOrders" class="btn btn-warning" onclick="generateOrders()">
+                📝 生成订单
+            </button>
+            <button id="btnOptimize" class="btn btn-success" onclick="runOptimize()">
+                🚀 开始优化
+            </button>
+        </div>
+
+        <!-- 状态信息 -->
+        <div id="statusPanel" class="status-panel">
+            <p>👆 点击按钮开始操作</p>
+        </div>
+
+        <!-- 骑手分配结果 -->
+        <div id="courierPanel" class="courier-panel" style="display:none;">
+            <h3>🚴 骑手分配结果</h3>
+            <div id="courierList"></div>
+        </div>
+    </div>
+
+    <!-- ===== 右侧：地图和图表 ===== -->
+    <div class="map-area">
+        <!-- Leaflet 地图 -->
+        <div id="map" style="height: 500px; border-radius: 10px;"></div>
+
+        <!-- 收敛曲线 -->
+        <div class="chart-area" style="display:none;" id="chartContainer">
+            <h3>📈 GA 收敛曲线</h3>
+            <canvas id="convergenceChart" height="200"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/delivery.js') }}"></script>
+{% endblock %}

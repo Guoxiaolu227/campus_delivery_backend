@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}校园外卖配送系统{% endblock %}</title>
+
+    <!-- Leaflet 地图库（开源免费，用于替代 matplotlib 绘图） -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Chart.js 图表库（用于绘制收敛曲线，替代 matplotlib） -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- 自定义样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <nav class="navbar">
+        <div class="nav-brand">🍜 校园外卖配送系统</div>
+        <div class="nav-links">
+            <a href="/">首页</a>
+        </div>
+    </nav>
+
+    <!-- 页面内容区域（子模板填充） -->
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- 页面脚本（子模板填充） -->
+    {% block scripts %}{% endblock %}
+</body>
+</html>

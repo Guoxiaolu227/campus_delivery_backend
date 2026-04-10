@@ -1,0 +1,31 @@
+# Python 缓存和编译文件
+__pycache__/
+*.pyc
+*.pyo
+
+# 数据库文件（如果包含测试数据或敏感数据）
+*.db
+*.sqlite3
+
+# 环境变量 / 配置文件（如果包含密码或密钥）
+.env
+config_local.py
+
+# 日志文件
+*.log
+
+# 虚拟环境
+venv/
+env/
+.venv/
+
+# IDE 配置（如 VSCode、PyCharm）
+.vscode/
+.idea/
+
+# 上传的静态缓存（你项目中的 cache 目录下可能是一些运行时生成的 JSON）
+/cache/*.json
+
+# 操作系统生成的文件
+.DS_Store
+Thumbs.db
