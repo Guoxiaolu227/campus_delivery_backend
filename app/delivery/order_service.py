@@ -35,26 +35,16 @@ class OrderService:
     # ① 手动下单
     # ============================================================
 
-    def create_order(self, to_poi_id=None, to_node_index=None, address=''):
+    def create_order(self, to_poi_id=None, to_node_index=None, address='', user_id=None):
         """
         创建一个订单（手动下单）
-
-        参数说明：
-          to_poi_id:     目的地 POI 的 ID（如果用户从下拉框选了一个已知地点）
-          to_node_index: 目的地节点编号（如果用户在地图上点击了任意位置）
-          address:       地址描述文字
-
-        二选一逻辑：
-          - 传了 to_poi_id → 从 POI 表查 node_index
-          - 传了 to_node_index → 直接使用
-
-        食堂（起点）固定为嘉慧园食堂（系统中唯一的 canteen 类型 POI）。
+        ★ 新增 user_id 参数：记录是谁下的单
         """
         # 查找食堂
         canteen = POI.query.filter_by(poi_type='canteen', is_active=True).first()
         from_poi_id = canteen.id if canteen else None
 
-        # 确定目的地
+        # 确定目的地（逻辑不动）
         if to_poi_id:
             poi = POI.query.get(to_poi_id)
             if not poi:
@@ -63,7 +53,6 @@ class OrderService:
             if not address:
                 address = poi.name
         elif to_node_index:
-            # 检查 node_index 合法性
             node_list = graph_service.get_node_list()
             if to_node_index < 1 or to_node_index > len(node_list):
                 raise ValueError(f"节点编号 {to_node_index} 超出范围")
@@ -73,6 +62,7 @@ class OrderService:
             raise ValueError("必须提供 to_poi_id 或 to_node_index")
 
         order = Order(
+            user_id=user_id,  # ← ★ 新增：关联下单用户
             from_poi_id=from_poi_id,
             to_poi_id=to_poi_id,
             to_node_index=to_node_index,

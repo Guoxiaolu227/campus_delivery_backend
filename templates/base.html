@@ -5,31 +5,69 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}校园外卖配送系统{% endblock %}</title>
 
-    <!-- Leaflet 地图库（开源免费，用于替代 matplotlib 绘图） -->
+    <!-- Leaflet 地图库 -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <!-- Chart.js 图表库（用于绘制收敛曲线，替代 matplotlib） -->
+    <!-- Chart.js 图表库 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- 自定义样式 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- 顶部导航栏 -->
+    <!-- 顶部导航栏 ★ 改造：根据登录状态显示不同内容 -->
     <nav class="navbar">
         <div class="nav-brand">🍜 校园外卖配送系统</div>
         <div class="nav-links">
             <a href="/">首页</a>
+
+            {% if current_user.is_authenticated %}
+                <!-- ★ 已登录：显示用户名 + 角色 + 退出 -->
+                <span style="color: #ccc; margin: 0 8px;">|</span>
+                <span style="color: #eee; font-size: 13px;">
+                    👤 {{ current_user.username }}
+                    {% if current_user.role == 'admin' %}
+                        <span style="background:#E74C3C;color:#fff;padding:1px 6px;border-radius:3px;font-size:11px;">管理员</span>
+                    {% elif current_user.role == 'rider' %}
+                        <span style="background:#3498DB;color:#fff;padding:1px 6px;border-radius:3px;font-size:11px;">骑手</span>
+                    {% else %}
+                        <span style="background:#2ECC71;color:#fff;padding:1px 6px;border-radius:3px;font-size:11px;">用户</span>
+                    {% endif %}
+                </span>
+                <a href="{{ url_for('auth.logout') }}" style="margin-left: 8px;">退出</a>
+            {% else %}
+                <!-- ★ 未登录：显示登录/注册 -->
+                <a href="{{ url_for('auth.login') }}">登录</a>
+                <a href="{{ url_for('auth.register') }}">注册</a>
+            {% endif %}
         </div>
     </nav>
 
-    <!-- 页面内容区域（子模板填充） -->
+    <!-- Flash 消息（登录/注册成功/失败的提示） -->
+    <div style="max-width: 600px; margin: 10px auto;">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div style="padding: 10px 16px; margin-bottom: 8px; border-radius: 6px; font-size: 14px;
+                        {% if category == 'danger' %}background: #FDECEA; color: #C0392B; border: 1px solid #E74C3C;
+                        {% elif category == 'success' %}background: #EAFAF1; color: #27AE60; border: 1px solid #2ECC71;
+                        {% else %}background: #EBF5FB; color: #2980B9; border: 1px solid #3498DB;
+                        {% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- 页面内容区域 -->
     <main class="container">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- 页面脚本（子模板填充） -->
     {% block scripts %}{% endblock %}
 </body>
 </html>

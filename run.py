@@ -22,3 +22,7 @@ if __name__ == '__main__':
     # debug=True: 开发模式，代码修改后自动重启
     # host='0.0.0.0': 允许局域网内其他设备访问
     app.run(debug=True, host='0.0.0.0', port=5000)
+"""
+    别忘了先搞个管理员：
+    flask create-admin --phone 13800000000 --username admin --password 123456
+"""

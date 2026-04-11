@@ -1,42 +1,100 @@
 """
 数据库模型
-★ 阶段2重写：订单系统化
+★ 用户系统版：新增 User 表，Order/Courier 关联用户
 
 核心变化：
-  - Order 表：新增完整状态机（5种状态 + 5个时间戳）
-  - Batch 表：新增配送批次，每次优化 = 一个批次
-  - Courier 表：保留，小幅调整
-  - POI 表：不变
+  - User 表：新增，支持三种角色（user/rider/admin）
+  - Order 表：新增 user_id 字段（谁下的单）
+  - Courier 表：新增 user_id 字段（关联哪个登录账号）
+  - Batch / POI / DeliveryResult：完全不动
 """
 
 from datetime import datetime
 from app.extensions import db
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 # ================================================================
-# 订单状态常量（状态机）
+# ★ 新增：用户表
 # ================================================================
-# 为什么用常量而不是硬编码字符串？
-# 1. 防拼写错误：写错 "pendng" 不会报错，但 ORDER_PENDING 未定义会立刻报错
-# 2. 方便全局搜索：Ctrl+F 搜 ORDER_PENDING 能找到所有使用的地方
-# 3. 后续可以加中文描述映射
 
-ORDER_PENDING = 'pending'         # 待接单：用户刚下的单，还没被纳入任何批次
-ORDER_ACCEPTED = 'accepted'       # 已接单：已被纳入某个批次，分配了骑手
-ORDER_PICKED_UP = 'picked_up'     # 已取餐：骑手到达食堂取了餐
-ORDER_DELIVERING = 'delivering'   # 配送中：骑手出发配送
-ORDER_DELIVERED = 'delivered'     # 已送达：骑手到达目的地
+class User(UserMixin, db.Model):
+    """
+    用户表 — 所有人（用户/骑手/管理员）共用一张表
 
-# 状态流转规则：当前状态 → 允许转到的下一状态
+    为什么继承 UserMixin？
+      Flask-Login 要求 User 模型必须有 is_authenticated, is_active,
+      is_anonymous, get_id() 四个属性/方法。UserMixin 帮你全部实现了，
+      你不需要自己写。
+
+    为什么用 role 字段而不是三张表？
+      三种角色共享 90% 的字段（手机号、密码、注册时间），
+      拆表会导致大量重复代码和频繁 JOIN 查询。
+      骑手的额外信息（接单上限、实时位置）放在已有的 Courier 表里通过 user_id 关联。
+    """
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    username = db.Column(db.String(64), nullable=False, comment='用户名')
+    phone = db.Column(db.String(20), unique=True, nullable=False, comment='手机号(唯一)')
+    password_hash = db.Column(db.String(256), nullable=False, comment='密码哈希值')
+    role = db.Column(db.String(20), nullable=False, default='user',
+                     comment='角色: user=普通用户, rider=骑手, admin=管理员')
+    is_active = db.Column(db.Boolean, default=True, comment='账号是否启用')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='注册时间')
+
+    # --- 关系 ---
+    orders = db.relationship('Order', backref='user', lazy='dynamic')
+
+    def set_password(self, password):
+        """
+        设置密码（自动哈希，永远不存明文）
+
+        内部调用 werkzeug 的 generate_password_hash()，
+        生成类似 'pbkdf2:sha256:260000$...' 的哈希字符串。
+        即使数据库泄露，攻击者也无法还原出原始密码。
+        """
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        """
+        验证密码
+
+        把用户输入的明文密码和数据库中的哈希值比对。
+        正确返回 True，错误返回 False。
+        """
+        return check_password_hash(self.password_hash, password)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'phone': self.phone,
+            'role': self.role,
+            'is_active': self.is_active,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else '',
+        }
+
+
+# ================================================================
+# 订单状态常量（状态机）— 完全不动
+# ================================================================
+
+ORDER_PENDING = 'pending'
+ORDER_ACCEPTED = 'accepted'
+ORDER_PICKED_UP = 'picked_up'
+ORDER_DELIVERING = 'delivering'
+ORDER_DELIVERED = 'delivered'
+
 STATUS_TRANSITIONS = {
     ORDER_PENDING:    [ORDER_ACCEPTED],
     ORDER_ACCEPTED:   [ORDER_PICKED_UP],
     ORDER_PICKED_UP:  [ORDER_DELIVERING],
     ORDER_DELIVERING: [ORDER_DELIVERED],
-    ORDER_DELIVERED:  []  # 终态，不能再转
+    ORDER_DELIVERED:  []
 }
 
-# 状态中文映射（前端展示用）
 STATUS_LABELS = {
     ORDER_PENDING:    '⏳ 待接单',
     ORDER_ACCEPTED:   '✅ 已接单',
@@ -47,28 +105,16 @@ STATUS_LABELS = {
 
 
 class Order(db.Model):
-    """
-    订单表（★ 阶段2重写）
-
-    每条记录 = 一个外卖订单
-
-    与旧版的区别：
-      旧版：只有 node_id + status，从未被真正使用
-      新版：
-        - 关联 POI（from_poi_id=食堂, to_poi_id=目的地）
-        - 完整状态机（5种状态 + 5个时间戳）
-        - 归属批次（batch_id，哪一批优化处理的）
-        - 归属骑手（courier_id，分配给谁）
-
-    关于 node_index：
-      直接存目的地的路网节点编号（1-based），这样优化算法可以直接使用，
-      不需要每次都去 POI 表查。
-    """
+    """订单表 — 新增 user_id 字段"""
     __tablename__ = 'orders'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
 
-    # --- 位置信息 ---
+    # --- ★ 新增：下单用户 ---
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'),
+                        nullable=True, comment='下单用户ID')
+
+    # --- 位置信息（不动）---
     from_poi_id = db.Column(db.Integer, db.ForeignKey('pois.id'),
                             nullable=True, comment='取餐地点(食堂) POI ID')
     to_poi_id = db.Column(db.Integer, db.ForeignKey('pois.id'),
@@ -77,40 +123,36 @@ class Order(db.Model):
                               comment='目的地路网节点编号(1-based)')
     address = db.Column(db.String(200), default='', comment='目的地描述文字')
 
-    # --- 状态 ---
+    # --- 状态（不动）---
     status = db.Column(db.String(20), default=ORDER_PENDING, comment='订单状态')
 
-    # --- ★ 阶段4新增：动态调度相关 ---
+    # --- 动态调度（不动）---
     is_frozen = db.Column(db.Boolean, default=False,
-                          comment='是否已冻结（骑手已经过该点，不可调整）')
+                          comment='是否已冻结')
     insert_batch_id = db.Column(db.Integer, nullable=True,
-                                comment='动态插入时的原始批次ID（区分初始订单和动态插入的）')
-    # --- 关联 ---
+                                comment='动态插入时的原始批次ID')
+
+    # --- 关联（不动）---
     batch_id = db.Column(db.Integer, db.ForeignKey('batches.id'),
                          nullable=True, comment='所属批次ID')
     courier_id = db.Column(db.Integer, db.ForeignKey('couriers.id'),
                            nullable=True, comment='分配的骑手ID')
 
-    # --- 时间戳（每个状态变化记录时间，用于统计配送耗时）---
-    created_at = db.Column(db.DateTime, default=datetime.utcnow,
-                           comment='下单时间')
-    accepted_at = db.Column(db.DateTime, nullable=True,
-                            comment='接单时间')
-    picked_up_at = db.Column(db.DateTime, nullable=True,
-                             comment='取餐时间')
-    delivering_at = db.Column(db.DateTime, nullable=True,
-                              comment='出发配送时间')
-    delivered_at = db.Column(db.DateTime, nullable=True,
-                             comment='送达时间')
+    # --- 时间戳（不动）---
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='下单时间')
+    accepted_at = db.Column(db.DateTime, nullable=True, comment='接单时间')
+    picked_up_at = db.Column(db.DateTime, nullable=True, comment='取餐时间')
+    delivering_at = db.Column(db.DateTime, nullable=True, comment='出发配送时间')
+    delivered_at = db.Column(db.DateTime, nullable=True, comment='送达时间')
 
-    # --- 关系（方便反向查询）---
+    # --- 关系（不动）---
     from_poi = db.relationship('POI', foreign_keys=[from_poi_id])
     to_poi = db.relationship('POI', foreign_keys=[to_poi_id])
 
     def to_dict(self):
-        """转为字典，方便 JSON 返回前端"""
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'from_poi_id': self.from_poi_id,
             'from_poi_name': self.from_poi.name if self.from_poi else '嘉慧园食堂',
             'to_poi_id': self.to_poi_id,
@@ -124,32 +166,13 @@ class Order(db.Model):
             'created_at': self.created_at.strftime('%H:%M:%S') if self.created_at else '',
             'accepted_at': self.accepted_at.strftime('%H:%M:%S') if self.accepted_at else '',
             'delivered_at': self.delivered_at.strftime('%H:%M:%S') if self.delivered_at else '',
-            # 在 to_dict() 的 return 字典里，'delivered_at' 那行后面加：
             'is_frozen': self.is_frozen,
-            'is_dynamic': self.insert_batch_id is not None,  # 是否为动态插入的订单
+            'is_dynamic': self.insert_batch_id is not None,
         }
 
 
 class Batch(db.Model):
-    """
-    配送批次表（★ 阶段2新增）
-
-    作用：
-      每次点击"开始优化"时，把当前所有 pending 订单打包成一个批次。
-      一个批次 = 一次 GA 优化运算 = 一组骑手路线方案。
-
-    为什么需要批次？
-      1. 历史可追溯：第1批10单、第2批8单，各自的路线方案互不干扰
-      2. 为动态调度奠定基础：新订单进入下一个批次
-      3. 支持"再次优化"：同一批次可以用不同参数重新计算
-
-    字段说明：
-      - order_count: 这批有多少单
-      - total_distance: GA 优化后的最优总距离
-      - courier_count: 参与配送的骑手数
-      - optimal_route_json: 完整优化结果（JSON），包含路线和骑手分配
-      - ga_params_json: 本次使用的 GA 参数快照
-    """
+    """配送批次表 — 完全不动"""
     __tablename__ = 'batches'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -161,7 +184,6 @@ class Batch(db.Model):
     ga_params_json = db.Column(db.Text, default='', comment='算法参数JSON')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # 关联的订单
     orders = db.relationship('Order', backref='batch', lazy='dynamic')
 
     def to_dict(self):
@@ -176,12 +198,17 @@ class Batch(db.Model):
 
 
 class Courier(db.Model):
-    """骑手表（保留，小幅调整）"""
+    """骑手表 — 新增 user_id 字段"""
     __tablename__ = 'couriers'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(50), nullable=False, comment='骑手名称')
     status = db.Column(db.String(20), default='available', comment='骑手状态')
+
+    # ★ 新增：关联登录账号（一个 rider 用户 ↔ 一个骑手记录）
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'),
+                        unique=True, nullable=True, comment='关联用户ID')
+
     orders = db.relationship('Order', backref='courier', lazy='dynamic')
 
     def to_dict(self):
@@ -189,12 +216,13 @@ class Courier(db.Model):
             'id': self.id,
             'name': self.name,
             'status': self.status,
+            'user_id': self.user_id,
             'order_count': self.orders.count()
         }
 
 
 class DeliveryResult(db.Model):
-    """配送优化结果表（保留，后续可和 Batch 关联）"""
+    """配送优化结果表 — 完全不动"""
     __tablename__ = 'delivery_results'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -214,11 +242,8 @@ class DeliveryResult(db.Model):
         }
 
 
-# ================================================================
-# POI 表（阶段1已有，完全不改）
-# ================================================================
-
 class POI(db.Model):
+    """POI 表 — 完全不动"""
     __tablename__ = 'pois'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

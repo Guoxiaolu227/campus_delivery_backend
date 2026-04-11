@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}登录 - 校园外卖配送系统{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2>🍜 登录</h2>
+        <p class="auth-subtitle">校园外卖配送系统</p>
+
+        <form method="POST" action="{{ url_for('auth.login') }}">
+            <div class="form-group">
+                <label for="phone">📱 手机号</label>
+                <input type="text" id="phone" name="phone" placeholder="请输入11位手机号"
+                       maxlength="11" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="password">🔒 密码</label>
+                <input type="password" id="password" name="password" placeholder="请输入密码" required>
+            </div>
+
+            <button type="submit" class="auth-btn">登 录</button>
+        </form>
+
+        <div class="auth-footer">
+            还没有账号？ <a href="{{ url_for('auth.register') }}">立即注册</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

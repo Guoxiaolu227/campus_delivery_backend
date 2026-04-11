@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}注册 - 校园外卖配送系统{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2>📝 注册</h2>
+        <p class="auth-subtitle">创建你的账号</p>
+
+        <form method="POST" action="{{ url_for('auth.register') }}">
+            <div class="form-group">
+                <label for="username">👤 用户名</label>
+                <input type="text" id="username" name="username" placeholder="输入你的昵称" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">📱 手机号</label>
+                <input type="text" id="phone" name="phone" placeholder="11位手机号" maxlength="11" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">🔒 密码</label>
+                <input type="password" id="password" name="password" placeholder="至少6位" minlength="6" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password2">🔒 确认密码</label>
+                <input type="password" id="password2" name="password2" placeholder="再输一次" minlength="6" required>
+            </div>
+
+            <div class="form-group">
+                <label>🎭 我的身份</label>
+                <div class="role-selector">
+                    <label class="role-option">
+                        <input type="radio" name="role" value="user" checked>
+                        <div class="role-card">
+                            <div class="role-icon">🙋</div>
+                            <div class="role-name">我要点餐</div>
+                            <div class="role-desc">普通用户，下单叫外卖</div>
+                        </div>
+                    </label>
+                    <label class="role-option">
+                        <input type="radio" name="role" value="rider">
+                        <div class="role-card">
+                            <div class="role-icon">🚴</div>
+                            <div class="role-name">我要接单</div>
+                            <div class="role-desc">骑手，配送外卖赚钱</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" class="auth-btn">注 册</button>
+        </form>
+
+        <div class="auth-footer">
+            已有账号？ <a href="{{ url_for('auth.login') }}">去登录</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
