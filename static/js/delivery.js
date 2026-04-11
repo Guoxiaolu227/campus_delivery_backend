@@ -383,3 +383,224 @@ function drawConvergenceChart(convergence) {
         options: { responsive: true, plugins: { title: { display: true, text: 'GA + 2-opt 收敛过程' } }, scales: { x: { title: { display: true, text: '代数' } }, y: { title: { display: true, text: '距离 (米)' } } } }
     });
 }
+
+// ================================================================
+// ★ 阶段4：动态调度前端逻辑
+// ================================================================
+
+let schedulerPollingTimer = null;  // 轮询定时器
+
+/** 启动动态调度 */
+async function startScheduler() {
+    if (!currentBatchId) { alert('请先优化一个批次！'); return; }
+
+    updateStatus('🔄 正在启动动态调度...', 'loading');
+
+    try {
+        // 先推进到"配送中"状态
+        await fetch('/delivery/orders/batch_status', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ batch_id: currentBatchId, status: 'picked_up' })
+        });
+        await fetch('/delivery/orders/batch_status', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ batch_id: currentBatchId, status: 'delivering' })
+        });
+
+        // 启动调度器
+        const res = await fetch('/delivery/scheduler/start', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ batch_id: currentBatchId })
+        });
+        const r = await res.json();
+        if (r.success) {
+            document.getElementById('dynamicPanel').style.display = 'block';
+            updateStatus(
+                `🔴 动态调度已启动！批次#${r.data.batch_id}，${r.data.courier_count}个骑手在路上<br>` +
+                `💡 现在可以继续下新单，系统会自动分配`,
+                'success'
+            );
+            loadOrders();
+            // 开始轮询
+            startPolling();
+        } else {
+            updateStatus(`❌ ${r.error}`, 'error');
+        }
+    } catch (e) {
+        updateStatus(`❌ ${e.message}`, 'error');
+    }
+}
+
+/** 动态下单（走 scheduler/insert_order API） */
+async function dynamicCreateOrder() {
+    const poiId = document.getElementById('orderDest').value;
+    const nodeIdx = parseInt(document.getElementById('orderNodeIndex').value);
+
+    if (!poiId && (!nodeIdx || nodeIdx < 1)) {
+        alert('请选择目的地，或在地图上点击选择位置！');
+        return;
+    }
+
+    const body = {};
+    if (poiId) { body.to_poi_id = parseInt(poiId); }
+    else { body.to_node_index = nodeIdx; }
+
+    try {
+        const res = await fetch('/delivery/scheduler/insert_order', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(body)
+        });
+        const r = await res.json();
+        if (r.success) {
+            const d = r.data;
+            updateStatus(
+                `✅ 实时下单成功！订单#${d.order.id} → 骑手${d.assigned_courier}<br>` +
+                `📌 插入位置: 第${d.insert_position}站 | 增加距离: ${d.added_distance}米`,
+                'success'
+            );
+            document.getElementById('orderDest').value = '';
+            document.getElementById('orderNodeIndex').value = '';
+            loadOrders();
+            refreshSchedulerMap();  // 立即刷新地图
+        } else {
+            alert('实时下单失败: ' + r.error);
+        }
+    } catch (e) { alert(e.message); }
+}
+
+/** 动态随机加单 */
+async function dynamicRandomOrders() {
+    const n = parseInt(document.getElementById('numDynamicOrders').value) || 5;
+    updateStatus(`🔄 正在实时插入 ${n} 个新订单...`, 'loading');
+
+    let successCount = 0;
+    let lastResult = null;
+
+    for (let i = 0; i < n; i++) {
+        try {
+            // 随机选一个非食堂 POI
+            const nonCanteen = allPois.filter(p => p.poi_type !== 'canteen');
+            if (nonCanteen.length === 0) {
+                // 没有 POI 就用随机节点
+                const nodeIdx = Math.floor(Math.random() * 40) + 1;  // 随机1-40
+                const res = await fetch('/delivery/scheduler/insert_order', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ to_node_index: nodeIdx })
+                });
+                const r = await res.json();
+                if (r.success) { successCount++; lastResult = r.data; }
+            } else {
+                const poi = nonCanteen[Math.floor(Math.random() * nonCanteen.length)];
+                const res = await fetch('/delivery/scheduler/insert_order', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ to_poi_id: poi.id })
+                });
+                const r = await res.json();
+                if (r.success) { successCount++; lastResult = r.data; }
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    updateStatus(
+        `✅ 实时插入完成！成功 ${successCount}/${n} 单<br>` +
+        `📌 最后一单 → 骑手${lastResult ? lastResult.assigned_courier : '?'}`,
+        'success'
+    );
+    loadOrders();
+    refreshSchedulerMap();
+}
+
+/** 所有骑手前进一步 */
+async function schedulerAdvanceAll() {
+    try {
+        const res = await fetch('/delivery/scheduler/advance', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ all: true })
+        });
+        const r = await res.json();
+        if (r.success) {
+            appendStatus('⏩ 所有骑手已前进一步', 'success');
+            refreshSchedulerMap();
+        }
+    } catch (e) { alert(e.message); }
+}
+
+/** 停止动态调度 */
+async function stopScheduler() {
+    try {
+        await fetch('/delivery/scheduler/stop', { method: 'POST' });
+        document.getElementById('dynamicPanel').style.display = 'none';
+        stopPolling();
+        updateStatus('⏹️ 动态调度已停止', 'success');
+    } catch (e) { alert(e.message); }
+}
+
+/** 刷新调度器状态并更新地图 */
+async function refreshSchedulerMap() {
+    try {
+        const res = await fetch('/delivery/scheduler/state');
+        const r = await res.json();
+        if (!r.success || !r.data.is_active) return;
+
+        const state = r.data;
+
+        // 更新统计
+        document.getElementById('statInserted').textContent = state.stats.total_inserted;
+        document.getElementById('statReoptimize').textContent = state.stats.total_reoptimize;
+        document.getElementById('statLastTime').textContent = state.stats.last_reoptimize_time || '-';
+
+        // 更新冻结状态
+        const frozenEl = document.getElementById('frozenStatus');
+        frozenEl.innerHTML = Object.values(state.couriers).map(c => {
+            const total = c.full_route.length - 2;  // 去掉首尾食堂
+            const frozen = c.frozen_index;
+            const adj = c.adjustable_count;
+            const color = COURIER_COLORS[(c.courier_id - 1) % COURIER_COLORS.length];
+            const bar = '█'.repeat(frozen) + '░'.repeat(adj);
+            return `<div style="font-size:11px;margin:2px 0;">
+                <span style="color:${color};font-weight:bold;">骑手${c.courier_id}</span>
+                <span style="font-family:monospace;">${bar}</span>
+                🔒${frozen} 可调${adj} | ${c.distance}米
+            </div>`;
+        }).join('');
+
+        // 重绘路线（用 detailed_coords）
+        if (state.route_data) {
+            routeLayer.clearLayers();
+
+            // 食堂标记
+            const canteenPoi = allPois.find(p => p.poi_type === 'canteen');
+            if (canteenPoi) {
+                L.circleMarker([canteenPoi.lat, canteenPoi.lon], {
+                    radius: 12, fillColor: '#F39C12', color: '#D68910', weight: 3, fillOpacity: 1
+                }).bindPopup('🍽️ 嘉慧园食堂').addTo(routeLayer);
+            }
+
+            for (const [cid, data] of Object.entries(state.route_data)) {
+                const coords = data.detailed_coords || data.route_coords;
+                if (coords && coords.length > 1) {
+                    const color = COURIER_COLORS[(parseInt(cid) - 1) % COURIER_COLORS.length];
+                    L.polyline(coords, {
+                        color: color, weight: 4, opacity: 0.8
+                    }).bindPopup(
+                        `🚴 骑手${cid}<br>📦 ${data.order_db_ids.length} 单<br>📏 ${data.distance}米<br>🔒 冻结: ${state.couriers[cid]?.frozen_index || 0}`
+                    ).addTo(routeLayer);
+                }
+            }
+        }
+    } catch (e) { console.error('刷新调度状态失败:', e); }
+}
+
+/** 开始轮询（每 3 秒刷新一次） */
+function startPolling() {
+    stopPolling();
+    schedulerPollingTimer = setInterval(refreshSchedulerMap, 3000);
+}
+
+/** 停止轮询 */
+function stopPolling() {
+    if (schedulerPollingTimer) {
+        clearInterval(schedulerPollingTimer);
+        schedulerPollingTimer = null;
+    }
+}

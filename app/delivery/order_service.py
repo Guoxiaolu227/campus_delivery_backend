@@ -312,6 +312,60 @@ class OrderService:
             courier_assignments[cid].append(loc_idx)
 
         return courier_assignments
+    # ============================================================
+    # ⑦ ★ 阶段4新增：动态调度相关
+    # ============================================================
+
+    def create_dynamic_order(self, to_poi_id=None, to_node_index=None,
+                             address='', batch_id=None):
+        """
+        创建一个"动态订单"——在骑手出发后新增的订单
+
+        和 create_order() 的区别：
+          - 状态直接设为 accepted（不需要等下一次批次优化）
+          - 记录 insert_batch_id，标记为动态插入
+          - 关联到当前活跃批次
+        """
+        canteen = POI.query.filter_by(poi_type='canteen', is_active=True).first()
+        from_poi_id = canteen.id if canteen else None
+
+        if to_poi_id:
+            poi = POI.query.get(to_poi_id)
+            if not poi:
+                raise ValueError(f"目的地 POI ID={to_poi_id} 不存在")
+            to_node_index = poi.node_index
+            if not address:
+                address = poi.name
+        elif to_node_index:
+            node_list = graph_service.get_node_list()
+            if to_node_index < 1 or to_node_index > len(node_list):
+                raise ValueError(f"节点编号 {to_node_index} 超出范围")
+            if not address:
+                address = f'节点 #{to_node_index}'
+        else:
+            raise ValueError("必须提供 to_poi_id 或 to_node_index")
+
+        order = Order(
+            from_poi_id=from_poi_id,
+            to_poi_id=to_poi_id,
+            to_node_index=to_node_index,
+            address=address,
+            status=ORDER_ACCEPTED,          # 直接 accepted
+            batch_id=batch_id,
+            insert_batch_id=batch_id,       # 标记为动态插入
+            accepted_at=datetime.utcnow()
+        )
+        db.session.add(order)
+        db.session.commit()
+        return order
+
+    def freeze_order(self, order_id):
+        """标记订单为已冻结（骑手已经过该配送点）"""
+        order = Order.query.get(order_id)
+        if order:
+            order.is_frozen = True
+            db.session.commit()
+        return order
 
 
 # 全局单例

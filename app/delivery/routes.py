@@ -27,7 +27,8 @@ from app.delivery.graph_service import graph_service
 from app.delivery.order_service import order_service
 from app.delivery.ga_optimizer import GeneticAlgorithmTSPWith2Opt
 from app.delivery.poi_service import poi_service
-
+# 在已有 import 之后加：
+from app.delivery.scheduler import scheduler
 
 # ================================================================
 # 路网信息（不变）
@@ -466,5 +467,239 @@ def find_nearest_node():
         lon = float(request.args.get('lon'))
         result = graph_service.find_nearest_node_info(lat, lon)
         return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ================================================================
+# ★ 阶段4：动态调度 API
+# ================================================================
+
+@bp.route('/scheduler/start', methods=['POST'])
+def start_scheduler():
+    """
+    启动动态调度模式（在批次优化完成后调用）
+
+    前端操作：点击"🚀 启动动态调度"按钮
+    后端逻辑：从最近一次批次优化结果初始化 Scheduler
+    """
+    try:
+        data = request.get_json() or {}
+        batch_id = data.get('batch_id')
+
+        if not batch_id:
+            # 自动取最近的批次
+            from app.models import Batch
+            latest = Batch.query.order_by(Batch.created_at.desc()).first()
+            if not latest:
+                return jsonify({'success': False, 'error': '没有可用的批次'}), 400
+            batch_id = latest.id
+
+        # 从批次结果中恢复骑手路线
+        from app.models import Batch
+        import json as json_lib
+        batch = Batch.query.get(batch_id)
+        if not batch or not batch.optimal_route_json:
+            return jsonify({'success': False, 'error': '批次没有优化结果'}), 400
+
+        result = json_lib.loads(batch.optimal_route_json)
+        courier_details = result.get('courier_details', {})
+
+        canteen_node_id = current_app.config['CANTEEN_NODE_ID']
+
+        # 初始化调度器
+        scheduler.init_from_batch(batch_id, courier_details, canteen_node_id)
+
+        # 启动后台微调线程
+        if current_app.config.get('SCHEDULER_AUTO_START', True):
+            interval = current_app.config.get('SCHEDULER_REOPTIMIZE_INTERVAL', 60)
+            scheduler.start_background(current_app._get_current_object(), interval)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'batch_id': batch_id,
+                'courier_count': len(scheduler.couriers),
+                'message': '动态调度已启动'
+            }
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/scheduler/insert_order', methods=['POST'])
+def scheduler_insert_order():
+    """
+    动态插入新订单（骑手出发后的实时下单）
+
+    请求 JSON:
+      {"to_poi_id": 3}      ← 从 POI 选
+      或
+      {"to_node_index": 25}  ← 地图点击
+
+    后端逻辑：
+      1. 创建订单（直接 accepted）
+      2. 调用 Scheduler 的插入法分配到最佳骑手
+      3. 返回分配结果
+    """
+    try:
+        if not scheduler.is_active:
+            return jsonify({'success': False, 'error': '调度器未启动，请先启动动态调度'}), 400
+
+        data = request.get_json()
+
+        # 1. 创建动态订单
+        order = order_service.create_dynamic_order(
+            to_poi_id=data.get('to_poi_id'),
+            to_node_index=data.get('to_node_index'),
+            address=data.get('address', ''),
+            batch_id=scheduler.batch_id
+        )
+
+        # 2. 获取距离函数
+        dist_func = scheduler._get_distance_func()
+        if not dist_func:
+            return jsonify({'success': False, 'error': '无法获取路网距离'}), 500
+
+        # 3. 插入法分配
+        result = scheduler.insert_order(
+            order_node_index=order.to_node_index,
+            order_db_id=order.id,
+            distance_func=dist_func
+        )
+
+        if not result:
+            return jsonify({'success': False, 'error': '插入失败：没有可用骑手'}), 400
+
+        # 4. 更新数据库：给订单分配骑手
+        order_service.assign_courier_to_orders(
+            scheduler.batch_id,
+            result['courier_id'],
+            [order.id]
+        )
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'order': order.to_dict(),
+                'assigned_courier': result['courier_id'],
+                'insert_position': result['position'],
+                'added_distance': result['added_distance'],
+                'message': f"订单#{order.id} → 骑手{result['courier_id']}"
+            }
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/scheduler/state', methods=['GET'])
+def get_scheduler_state():
+    """
+    获取调度器当前状态（前端轮询用）
+
+    返回包括：
+      - 每个骑手的最新路线
+      - 路线坐标（地图绘制用）
+      - 冻结指针位置
+      - 统计信息
+    """
+    try:
+        state = scheduler.get_state()
+
+        # 也返回路线坐标（给地图用）
+        if scheduler.is_active:
+            positions = graph_service.get_node_positions()
+            node_list = graph_service.get_node_list()
+
+            def get_pos(node_index):
+                """node_index(1-based) → {'lat', 'lon'}"""
+                if 1 <= node_index <= len(node_list):
+                    real_node = node_list[node_index - 1]
+                    return positions.get(real_node)
+                return None
+
+            route_data = scheduler.get_courier_routes_for_map(get_pos)
+
+            # 为每个骑手生成详细路径坐标（通过 Dijkstra 走实际道路）
+            graph = graph_service.get_graph()
+            for cid, data in route_data.items():
+                if cid in scheduler.couriers:
+                    full_route = scheduler.couriers[cid].full_route
+                    detailed_coords = []
+                    for k in range(len(full_route) - 1):
+                        from_idx = full_route[k]
+                        to_idx = full_route[k + 1]
+                        if (1 <= from_idx <= len(node_list) and
+                                1 <= to_idx <= len(node_list)):
+                            from_node = node_list[from_idx - 1]
+                            to_node = node_list[to_idx - 1]
+                            try:
+                                path = nx.shortest_path(
+                                    graph, from_node, to_node, weight='length'
+                                )
+                                for node in path:
+                                    pos = positions[node]
+                                    detailed_coords.append(
+                                        [pos['lat'], pos['lon']]
+                                    )
+                            except nx.NetworkXNoPath:
+                                pass
+                    data['detailed_coords'] = detailed_coords
+
+            state['route_data'] = route_data
+
+        return jsonify({'success': True, 'data': state})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/scheduler/advance', methods=['POST'])
+def scheduler_advance():
+    """
+    模拟骑手前进（冻结指针推进）
+
+    请求 JSON:
+      {"courier_id": 1}    ← 指定骑手前进一步
+      或
+      {"all": true}        ← 所有骑手前进一步
+    """
+    try:
+        data = request.get_json() or {}
+
+        if data.get('all'):
+            scheduler.advance_all()
+            return jsonify({
+                'success': True,
+                'data': {'message': '所有骑手已前进一步'}
+            })
+        else:
+            cid = data.get('courier_id')
+            if not cid:
+                return jsonify({'success': False, 'error': '需要 courier_id 或 all'}), 400
+            ok = scheduler.advance_courier(int(cid))
+            if ok:
+                return jsonify({
+                    'success': True,
+                    'data': {'message': f'骑手{cid}已前进一步'}
+                })
+            else:
+                return jsonify({'success': False, 'error': f'骑手{cid}不存在'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/scheduler/stop', methods=['POST'])
+def stop_scheduler():
+    """停止动态调度"""
+    try:
+        scheduler.reset()
+        return jsonify({'success': True, 'data': {'message': '调度器已停止'}})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

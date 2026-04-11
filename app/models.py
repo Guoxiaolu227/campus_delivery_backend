@@ -80,6 +80,11 @@ class Order(db.Model):
     # --- 状态 ---
     status = db.Column(db.String(20), default=ORDER_PENDING, comment='订单状态')
 
+    # --- ★ 阶段4新增：动态调度相关 ---
+    is_frozen = db.Column(db.Boolean, default=False,
+                          comment='是否已冻结（骑手已经过该点，不可调整）')
+    insert_batch_id = db.Column(db.Integer, nullable=True,
+                                comment='动态插入时的原始批次ID（区分初始订单和动态插入的）')
     # --- 关联 ---
     batch_id = db.Column(db.Integer, db.ForeignKey('batches.id'),
                          nullable=True, comment='所属批次ID')
@@ -119,6 +124,9 @@ class Order(db.Model):
             'created_at': self.created_at.strftime('%H:%M:%S') if self.created_at else '',
             'accepted_at': self.accepted_at.strftime('%H:%M:%S') if self.accepted_at else '',
             'delivered_at': self.delivered_at.strftime('%H:%M:%S') if self.delivered_at else '',
+            # 在 to_dict() 的 return 字典里，'delivered_at' 那行后面加：
+            'is_frozen': self.is_frozen,
+            'is_dynamic': self.insert_batch_id is not None,  # 是否为动态插入的订单
         }
 
 

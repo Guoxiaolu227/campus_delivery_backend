@@ -99,9 +99,42 @@
                 <button class="btn btn-sm btn-info" onclick="batchAdvance('picked_up')">🍽️ 全部取餐</button>
                 <button class="btn btn-sm btn-warning" onclick="batchAdvance('delivering')">🚴 全部出发</button>
                 <button class="btn btn-sm btn-success" onclick="batchAdvance('delivered')">📦 全部送达</button>
+                            <!-- 在原有的3个按钮后面追加 -->
+                <div style="margin-top: 8px;">
+                    <button class="btn btn-sm btn-danger" onclick="startScheduler()" style="width:100%;background:#E74C3C;">
+                        🔴 启动动态调度（允许实时加单）
+                    </button>
+                </div>
             </div>
         </div>
+        <!-- ★ 阶段4新增：动态调度面板 -->
+        <div id="dynamicPanel" class="param-group" style="display:none; border: 2px solid #E74C3C; background: #FFF5F5;">
+            <h3>🔴 动态调度模式 <span id="schedulerBadge" style="background:#E74C3C;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">LIVE</span></h3>
 
+            <div class="btn-group-h" style="margin-bottom: 8px;">
+                <button class="btn btn-sm btn-warning" onclick="schedulerAdvanceAll()">⏩ 全部前进一步</button>
+                <button class="btn btn-sm btn-danger" onclick="stopScheduler()" style="background:#E74C3C;">⏹️ 停止调度</button>
+            </div>
+
+            <p class="hint">💡 骑手已出发！现在可以继续下单，系统会自动分配到最合适的骑手</p>
+
+            <!-- 实时下单（复用已有下拉框，但走不同的API） -->
+            <div class="btn-group-h" style="margin-top: 6px;">
+                <button class="btn btn-sm btn-success" onclick="dynamicCreateOrder()">🆕 实时下单</button>
+                <button class="btn btn-sm btn-info" onclick="dynamicRandomOrders()">🎲 实时随机加单</button>
+            </div>
+            <label style="margin-top:4px;">实时加单数: <input type="number" id="numDynamicOrders" value="5" min="1" max="20" style="width:60px;float:right;"></label>
+
+            <!-- 调度统计 -->
+            <div id="schedulerStats" style="margin-top: 10px; padding: 8px; background: #f8f8f8; border-radius: 6px; font-size: 12px;">
+                <div>📌 动态插入: <strong id="statInserted">0</strong> 单</div>
+                <div>🔄 全局微调: <strong id="statReoptimize">0</strong> 次</div>
+                <div>⏱️ 上次微调: <strong id="statLastTime">-</strong></div>
+            </div>
+
+            <!-- 骑手冻结状态 -->
+            <div id="frozenStatus" style="margin-top:8px;"></div>
+        </div>
         <div id="statusPanel" class="status-panel">
             <p>👆 先「加载路网」→「初始化地点」→ 再下单</p>
         </div>

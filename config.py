@@ -112,3 +112,6 @@ class Config:
             'capacity': 0
         },
     ]
+    # ===== ★ 阶段4新增：动态调度配置 =====
+    SCHEDULER_REOPTIMIZE_INTERVAL = 60    # 后台全局微调间隔（秒）
+    SCHEDULER_AUTO_START = True           # 批次优化后是否自动启动后台线程
