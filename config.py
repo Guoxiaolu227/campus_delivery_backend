@@ -24,11 +24,18 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # ===== 校园配送专属配置 =====
-    SCHOOL_CENTER_LAT = 30.57978       # 武汉理工大学中心纬度
-    SCHOOL_CENTER_LON = 114.32819      # 武汉理工大学中心经度
-    SCHOOL_NAME = "Wuhan University of Technology"
+    SCHOOL_CENTER_LAT = 30.57978       # 湖北大学中心纬度
+    SCHOOL_CENTER_LON = 114.32819      # 湖北大学中心经度
+    SCHOOL_NAME = "Hubei University"
     CAMPUS_RADIUS = 400                # 校园覆盖半径（米）
     CANTEEN_NODE_ID = 19               # ★ 嘉慧园食堂节点编号（从1开始）
+
+    # # ===== 校园配送专属配置 =====
+    # SCHOOL_CENTER_LAT = 32.030326131572934       # 南京理工大学中心纬度
+    # SCHOOL_CENTER_LON = 118.85484430503536      # 南京理工大学中心经度
+    # SCHOOL_NAME = "Nanjing University of Science and Technology"
+    # CAMPUS_RADIUS = 600                # 校园覆盖半径（米）
+    # CANTEEN_NODE_ID = 19               # ★ 食堂节点编号（从1开始）
 
     # ===== ★ 阶段1新增：校园 POI 预设数据 =====
     # 说明：

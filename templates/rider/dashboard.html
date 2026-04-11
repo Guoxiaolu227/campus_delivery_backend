@@ -6,46 +6,44 @@
     .rider-container { max-width: 500px; margin: 20px auto; padding: 0 16px; }
     .section-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 16px; }
     .section-card h3 { margin-top: 0; font-size: 16px; }
-    .task-item { padding: 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; }
-    .task-item .address { font-weight: 600; }
-    .task-item .meta { color: #999; font-size: 11px; margin-top: 4px; }
-    .status-btn { padding: 6px 14px; border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; margin-top: 6px; }
-    .btn-pickup { background: #3498DB; }
-    .btn-depart { background: #F39C12; }
-    .btn-deliver { background: #2ECC71; }
+    .stat-row { display: flex; gap: 10px; margin-bottom: 14px; }
+    .stat-box { flex: 1; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 14px; text-align: center; }
+    .stat-box .num { font-size: 26px; font-weight: 700; }
+    .stat-box .label { font-size: 11px; color: #999; margin-top: 2px; }
+    .big-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 10px; }
+    .big-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .big-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .task-card { padding: 14px; border: 1px solid #eee; border-radius: 10px; margin-bottom: 10px; position: relative; }
+    .task-card.current { border: 2px solid #E74C3C; background: #FFF5F5; }
+    .task-card.delivered { opacity: 0.5; }
+    .task-card .seq { position: absolute; top: -8px; left: 12px; background: #667eea; color: #fff; width: 22px; height: 22px; border-radius: 50%; text-align: center; line-height: 22px; font-size: 11px; font-weight: 700; }
+    .task-card.current .seq { background: #E74C3C; }
+    .task-card.delivered .seq { background: #27AE60; }
+    .task-card .dest { font-weight: 600; font-size: 14px; margin-left: 20px; }
+    .task-card .meta { color: #999; font-size: 11px; margin-top: 4px; }
+    .deliver-btn { padding: 8px 20px; border: none; border-radius: 8px; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; background: #27AE60; }
+    .deliver-btn:hover { background: #1E8449; }
+    .done-banner { text-align: center; padding: 30px; font-size: 18px; }
     .empty-tip { text-align: center; color: #aaa; padding: 30px; font-size: 14px; }
-    .stat-row { display: flex; gap: 12px; margin-bottom: 16px; }
-    .stat-box { flex: 1; background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center; }
-    .stat-box .num { font-size: 24px; font-weight: 700; color: #333; }
-    .stat-box .label { font-size: 11px; color: #999; }
+    .phase-tip { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; text-align: center; font-weight: 600; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="rider-container">
 
-    <!-- 统计 -->
     <div class="stat-row">
-        <div class="stat-box">
-            <div class="num" id="statDelivering">-</div>
-            <div class="label">配送中</div>
-        </div>
-        <div class="stat-box">
-            <div class="num" id="statDone">-</div>
-            <div class="label">已完成</div>
-        </div>
-        <div class="stat-box">
-            <div class="num" id="statTotal">-</div>
-            <div class="label">总任务</div>
-        </div>
+        <div class="stat-box"><div class="num" id="statTotal">-</div><div class="label">总任务</div></div>
+        <div class="stat-box"><div class="num" id="statDoing">-</div><div class="label">进行中</div></div>
+        <div class="stat-box"><div class="num" id="statDone">-</div><div class="label">已完成</div></div>
     </div>
 
-    <!-- 配送任务 -->
+    <!-- 阶段操作区 -->
+    <div id="phaseArea"></div>
+
     <div class="section-card">
-        <h3>🚴 我的配送任务 <button onclick="loadTasks()" style="float:right;border:none;background:none;color:#3498DB;cursor:pointer;font-size:13px;">🔄 刷新</button></h3>
-        <div id="taskList">
-            <div class="empty-tip">加载中...</div>
-        </div>
+        <h3>📋 配送路线 <button onclick="loadTasks()" style="float:right;border:none;background:none;color:#3498DB;cursor:pointer;font-size:13px;">🔄 刷新</button></h3>
+        <div id="taskList"><div class="empty-tip">加载中...</div></div>
     </div>
 
 </div>
@@ -53,62 +51,97 @@
 
 {% block scripts %}
 <script>
-function loadTasks() {
-    fetch('/rider/my_deliveries')
-        .then(r => r.json())
-        .then(data => {
-            const list = document.getElementById('taskList');
-            if (!data.success || data.data.length === 0) {
-                list.innerHTML = '<div class="empty-tip">暂无配送任务，等待管理员分配 ☕</div>';
-                document.getElementById('statDelivering').textContent = '0';
-                document.getElementById('statDone').textContent = '0';
-                document.getElementById('statTotal').textContent = '0';
-                return;
+function loadTasks(){
+    fetch('/rider/my_deliveries').then(r=>r.json()).then(data=>{
+        const list=document.getElementById('taskList');
+        const phase=document.getElementById('phaseArea');
+
+        if(!data.success||data.data.length===0){
+            list.innerHTML='<div class="empty-tip">暂无配送任务，等待管理员分配 ☕</div>';
+            phase.innerHTML='';
+            ['statTotal','statDoing','statDone'].forEach(id=>document.getElementById(id).textContent='0');
+            return;
+        }
+
+        const s=data.stats;
+        document.getElementById('statTotal').textContent=s.total;
+        document.getElementById('statDoing').textContent=s.delivering;
+        document.getElementById('statDone').textContent=s.delivered;
+
+        // 判断当前阶段，显示对应的大按钮
+        if(s.accepted>0 && s.picked_up===0 && s.delivering===0){
+            // 阶段1：有 accepted 订单 → 显示"一键取餐"
+            phase.innerHTML=`
+                <div class="phase-tip" style="background:#EBF5FB;color:#2980B9;">📍 请前往食堂取餐（共 ${s.accepted} 单）</div>
+                <button class="big-btn" style="background:linear-gradient(135deg,#3498DB,#2980B9);" onclick="batchPickup()">🍽️ 我已到食堂，一键取餐</button>`;
+        } else if(s.picked_up>0 && s.delivering===0){
+            // 阶段2：全部取餐完毕 → 显示"一键出发"
+            phase.innerHTML=`
+                <div class="phase-tip" style="background:#FEF3E2;color:#D68910;">🍽️ 已取餐 ${s.picked_up} 单，准备出发！</div>
+                <button class="big-btn" style="background:linear-gradient(135deg,#F39C12,#E67E22);" onclick="startDelivery()">🚴 出发配送！</button>`;
+        } else if(s.delivering>0){
+            // 阶段3：配送中
+            phase.innerHTML=`<div class="phase-tip" style="background:#FDEBD0;color:#CA6F1E;">🚴 配送中，剩余 ${s.delivering} 单</div>`;
+        } else if(s.delivered===s.total && s.total>0){
+            // 全部完成
+            phase.innerHTML=`<div class="done-banner">🎉 全部送达！共 ${s.total} 单</div>`;
+        } else {
+            phase.innerHTML='';
+        }
+
+        // 渲染任务列表
+        list.innerHTML=data.data.map(o=>{
+            const isCurrent=o.is_current;
+            const isDone=o.status==='delivered';
+            let cls='task-card';
+            if(isCurrent) cls+=' current';
+            if(isDone) cls+=' delivered';
+
+            let btnHtml='';
+            // 只有当前任务（is_current）才显示送达按钮
+            if(isCurrent){
+                btnHtml=`<button class="deliver-btn" onclick="deliverOrder(${o.id})">📦 确认送达</button>`;
             }
 
-            // 统计
-            let delivering = 0, done = 0;
-            data.data.forEach(o => {
-                if (o.status === 'delivered') done++;
-                else if (o.status !== 'pending') delivering++;
-            });
-            document.getElementById('statDelivering').textContent = delivering;
-            document.getElementById('statDone').textContent = done;
-            document.getElementById('statTotal').textContent = data.data.length;
+            let statusText=o.status_label;
+            if(isCurrent) statusText='🔴 当前目标';
+            if(isDone) statusText='✅ 已送达';
 
-            // 渲染任务列表
-            list.innerHTML = data.data.map(o => {
-                let btnHtml = '';
-                if (o.status === 'accepted')
-                    btnHtml = `<button class="status-btn btn-pickup" onclick="advanceStatus(${o.id},'picked_up')">🍽️ 已取餐</button>`;
-                else if (o.status === 'picked_up')
-                    btnHtml = `<button class="status-btn btn-depart" onclick="advanceStatus(${o.id},'delivering')">🚴 出发配送</button>`;
-                else if (o.status === 'delivering')
-                    btnHtml = `<button class="status-btn btn-deliver" onclick="advanceStatus(${o.id},'delivered')">📦 已送达</button>`;
-
-                return `
-                    <div class="task-item">
-                        <div class="address">#${o.id} → ${o.address}</div>
-                        <div class="meta">${o.status_label} | 下单 ${o.created_at}</div>
-                        ${btnHtml}
-                    </div>`;
-            }).join('');
-        });
+            return `<div class="${cls}">
+                <span class="seq">${o.route_index}</span>
+                <div class="dest">${o.address}</div>
+                <div class="meta">${statusText} | 下单 ${o.created_at}${o.delivered_at?' | 送达 '+o.delivered_at:''}</div>
+                ${btnHtml}
+            </div>`;
+        }).join('');
+    });
 }
 
-function advanceStatus(orderId, newStatus) {
-    fetch('/rider/update_status', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ order_id: orderId, status: newStatus })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) loadTasks();
+function batchPickup(){
+    fetch('/rider/batch_pickup',{method:'POST'}).then(r=>r.json()).then(data=>{
+        if(data.success) loadTasks();
+        else alert(data.error);
+    });
+}
+
+function startDelivery(){
+    fetch('/rider/start_delivery',{method:'POST'}).then(r=>r.json()).then(data=>{
+        if(data.success) loadTasks();
+        else alert(data.error);
+    });
+}
+
+function deliverOrder(orderId){
+    fetch('/rider/update_status',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({order_id:orderId, status:'delivered'})
+    }).then(r=>r.json()).then(data=>{
+        if(data.success) loadTasks();
         else alert(data.error);
     });
 }
 
 loadTasks();
+// 自动刷新（有新的动态插入订单时能及时看到）
+setInterval(loadTasks, 8000);
 </script>
 {% endblock %}

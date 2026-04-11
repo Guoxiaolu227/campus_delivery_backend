@@ -9,31 +9,42 @@
     .poi-select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 12px; }
     .order-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #2ECC71, #27AE60); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
     .order-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(46,204,113,0.3); }
-    .order-item { padding: 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; font-size: 13px; }
-    .order-item .status { float: right; }
+    .order-card { padding: 14px; border: 1px solid #eee; border-radius: 10px; margin-bottom: 10px; background: #fafafa; }
+    .order-card .header { display: flex; justify-content: space-between; align-items: center; }
+    .order-card .dest { font-weight: 600; font-size: 14px; }
+    .order-card .meta { color: #999; font-size: 11px; margin-top: 6px; }
+    .order-card .cancel-btn { padding: 4px 12px; border: 1px solid #E74C3C; color: #E74C3C; background: none; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .order-card .cancel-btn:hover { background: #E74C3C; color: #fff; }
     .empty-tip { text-align: center; color: #aaa; padding: 30px; font-size: 14px; }
+    /* 进度条 */
+    .progress-bar { display: flex; margin-top: 8px; gap: 0; }
+    .progress-step { flex: 1; text-align: center; font-size: 10px; color: #bbb; padding: 4px 0; border-bottom: 3px solid #eee; }
+    .progress-step.done { color: #27AE60; border-bottom-color: #27AE60; }
+    .progress-step.active { color: #3498DB; border-bottom-color: #3498DB; font-weight: 700; }
+    .status-tag { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .status-tag.pending { background: #FEF3E2; color: #D68910; }
+    .status-tag.accepted { background: #EBF5FB; color: #2980B9; }
+    .status-tag.picked_up { background: #F4ECF7; color: #7D3C98; }
+    .status-tag.delivering { background: #FDEBD0; color: #CA6F1E; }
+    .status-tag.delivered { background: #E8F8F5; color: #1E8449; }
+    .auto-refresh { font-size: 11px; color: #bbb; text-align: center; margin-top: 6px; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="user-container">
 
-    <!-- 快速下单 -->
     <div class="section-card">
         <h3>🛒 我要下单</h3>
-        <select id="poiSelect" class="poi-select">
-            <option value="">加载中...</option>
-        </select>
+        <select id="poiSelect" class="poi-select"><option value="">加载中...</option></select>
         <button class="order-btn" onclick="submitOrder()">确认下单</button>
         <div id="orderMsg" style="margin-top:10px; font-size:13px;"></div>
     </div>
 
-    <!-- 我的订单 -->
     <div class="section-card">
         <h3>📋 我的订单 <button onclick="loadMyOrders()" style="float:right;border:none;background:none;color:#3498DB;cursor:pointer;font-size:13px;">🔄 刷新</button></h3>
-        <div id="myOrderList">
-            <div class="empty-tip">加载中...</div>
-        </div>
+        <div id="myOrderList"><div class="empty-tip">加载中...</div></div>
+        <div class="auto-refresh">⏱ 每 5 秒自动刷新</div>
     </div>
 
 </div>
@@ -41,62 +52,74 @@
 
 {% block scripts %}
 <script>
-// 加载可选地点
-fetch('/user/pois')
-    .then(r => r.json())
-    .then(data => {
-        const sel = document.getElementById('poiSelect');
-        sel.innerHTML = '<option value="">-- 选择配送目的地 --</option>';
-        if (data.success) {
-            data.data.forEach(p => {
-                sel.innerHTML += `<option value="${p.id}">📍 ${p.name}</option>`;
-            });
-        }
+const STEPS = ['pending','accepted','picked_up','delivering','delivered'];
+const STEP_LABELS = ['待接单','已接单','已取餐','配送中','已送达'];
+
+fetch('/user/pois').then(r=>r.json()).then(data=>{
+    const sel=document.getElementById('poiSelect');
+    sel.innerHTML='<option value="">-- 选择配送目的地 --</option>';
+    if(data.success) data.data.forEach(p=>{
+        sel.innerHTML+=`<option value="${p.id}">📍 ${p.name}</option>`;
     });
+});
 
-// 下单
-function submitOrder() {
-    const poiId = document.getElementById('poiSelect').value;
-    if (!poiId) { alert('请选择配送目的地'); return; }
-
-    fetch('/user/create_order', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ to_poi_id: parseInt(poiId) })
-    })
-    .then(r => r.json())
-    .then(data => {
-        const msg = document.getElementById('orderMsg');
-        if (data.success) {
-            msg.innerHTML = '<span style="color:#27AE60;">✅ 下单成功！</span>';
-            loadMyOrders();
-        } else {
-            msg.innerHTML = `<span style="color:#E74C3C;">❌ ${data.error}</span>`;
-        }
+function submitOrder(){
+    const poiId=document.getElementById('poiSelect').value;
+    if(!poiId){alert('请选择配送目的地');return;}
+    fetch('/user/create_order',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({to_poi_id:parseInt(poiId)})
+    }).then(r=>r.json()).then(data=>{
+        const msg=document.getElementById('orderMsg');
+        if(data.success){msg.innerHTML='<span style="color:#27AE60;">✅ 下单成功！</span>';loadMyOrders();}
+        else msg.innerHTML=`<span style="color:#E74C3C;">❌ ${data.error}</span>`;
     });
 }
 
-// 加载我的订单
-function loadMyOrders() {
-    fetch('/user/my_orders')
-        .then(r => r.json())
-        .then(data => {
-            const list = document.getElementById('myOrderList');
-            if (!data.success || data.data.length === 0) {
-                list.innerHTML = '<div class="empty-tip">暂无订单，去下一单吧 🍜</div>';
-                return;
-            }
-            list.innerHTML = data.data.map(o => `
-                <div class="order-item">
-                    <strong>#${o.id}</strong> → ${o.address}
-                    <span class="status">${o.status_label}</span>
-                    <div style="color:#999;font-size:11px;margin-top:4px;">下单时间: ${o.created_at}</div>
+function loadMyOrders(){
+    fetch('/user/my_orders').then(r=>r.json()).then(data=>{
+        const list=document.getElementById('myOrderList');
+        if(!data.success||data.data.length===0){
+            list.innerHTML='<div class="empty-tip">暂无订单，去下一单吧 🍜</div>';return;
+        }
+        list.innerHTML=data.data.map(o=>{
+            const stepIdx=STEPS.indexOf(o.status);
+            const progressHtml=STEPS.map((s,i)=>{
+                let cls='';
+                if(i<stepIdx) cls='done';
+                else if(i===stepIdx) cls='active';
+                return `<div class="progress-step ${cls}">${STEP_LABELS[i]}</div>`;
+            }).join('');
+
+            const cancelHtml=o.status==='pending'
+                ?`<button class="cancel-btn" onclick="cancelOrder(${o.id})">取消</button>`:'';
+            const courierHtml=o.courier_name?`<div class="meta">🚴 骑手: ${o.courier_name}</div>`:'';
+
+            return `<div class="order-card">
+                <div class="header">
+                    <span class="dest">#${o.id} → ${o.address}</span>
+                    <span class="status-tag ${o.status}">${o.status_label}</span>
                 </div>
-            `).join('');
-        });
+                ${courierHtml}
+                <div class="meta">🕐 下单: ${o.created_at}${o.delivered_at?' | ✅ 送达: '+o.delivered_at:''}</div>
+                <div class="progress-bar">${progressHtml}</div>
+                <div style="text-align:right;margin-top:6px;">${cancelHtml}</div>
+            </div>`;
+        }).join('');
+    });
 }
 
-// 页面加载时自动获取订单
+function cancelOrder(orderId){
+    if(!confirm('确定取消这个订单？')) return;
+    fetch('/user/cancel_order',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({order_id:orderId})
+    }).then(r=>r.json()).then(data=>{
+        if(data.success) loadMyOrders();
+        else alert(data.error);
+    });
+}
+
 loadMyOrders();
+// ★ 自动刷新：每5秒更新订单状态
+setInterval(loadMyOrders, 5000);
 </script>
 {% endblock %}

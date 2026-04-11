@@ -3,102 +3,205 @@
 
 {% block extra_css %}
 <style>
-    .admin-stats { display: flex; gap: 12px; flex-wrap: wrap; max-width: 900px; margin: 16px auto; padding: 0 16px; }
-    .admin-stat { flex: 1; min-width: 120px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 16px; text-align: center; }
-    .admin-stat .num { font-size: 28px; font-weight: 700; }
-    .admin-stat .label { font-size: 12px; color: #888; margin-top: 4px; }
-    .admin-tabs { max-width: 900px; margin: 16px auto; padding: 0 16px; }
-    .admin-tabs a { display: inline-block; padding: 8px 18px; background: #f0f0f0; border-radius: 8px; margin-right: 8px; text-decoration: none; color: #333; font-size: 13px; }
-    .admin-tabs a:hover, .admin-tabs a.active { background: #3498DB; color: #fff; }
+    .admin-stats { display: flex; gap: 12px; flex-wrap: wrap; max-width: 1400px; margin: 16px auto; padding: 0 20px; }
+    .admin-stat { flex: 1; min-width: 100px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 14px; text-align: center; }
+    .admin-stat .num { font-size: 26px; font-weight: 700; }
+    .admin-stat .label { font-size: 11px; color: #888; margin-top: 4px; }
+    .admin-toolbar { max-width: 1400px; margin: 0 auto 10px; padding: 0 20px; }
+    .admin-toolbar a { display: inline-block; padding: 6px 16px; background: #f0f0f0; border-radius: 8px; margin-right: 6px; text-decoration: none; color: #333; font-size: 13px; }
+    .admin-toolbar a:hover, .admin-toolbar a.active { background: #3498DB; color: #fff; }
+    #userPanel { max-width: 1400px; margin: 10px auto; padding: 0 20px; }
+    #userPanelInner { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 20px; }
 </style>
 {% endblock %}
 
 {% block content %}
-
 <!-- 数据概览 -->
-<div class="admin-stats" id="statsRow">
-    <div class="admin-stat"><div class="num" id="sUsers">-</div><div class="label">用户数</div></div>
-    <div class="admin-stat"><div class="num" id="sRiders">-</div><div class="label">骑手数</div></div>
-    <div class="admin-stat"><div class="num" id="sOrders">-</div><div class="label">总订单</div></div>
-    <div class="admin-stat"><div class="num" id="sPending">-</div><div class="label">待接单</div></div>
-    <div class="admin-stat"><div class="num" id="sDelivering">-</div><div class="label">配送中</div></div>
-    <div class="admin-stat"><div class="num" id="sDelivered">-</div><div class="label">已送达</div></div>
+<div class="admin-stats">
+    <div class="admin-stat"><div class="num" id="sUsers">-</div><div class="label">👤 用户数</div></div>
+    <div class="admin-stat"><div class="num" id="sRiders">-</div><div class="label">🚴 骑手数</div></div>
+    <div class="admin-stat"><div class="num" id="sOrders">-</div><div class="label">📦 总订单</div></div>
+    <div class="admin-stat"><div class="num" id="sPending">-</div><div class="label">⏳ 待接单</div></div>
+    <div class="admin-stat"><div class="num" id="sDelivering">-</div><div class="label">🚴 配送中</div></div>
+    <div class="admin-stat"><div class="num" id="sDelivered">-</div><div class="label">✅ 已送达</div></div>
 </div>
 
-<!-- 功能入口 -->
-<div class="admin-tabs">
-    <a href="#" onclick="return false;" class="active">📊 调度系统</a>
-    <a href="#" onclick="loadUserList(); return false;">👥 用户管理</a>
+<!-- 功能切换 -->
+<div class="admin-toolbar">
+    <a href="#" id="tabDispatch" class="active" onclick="showTab('dispatch');return false;">📊 调度系统</a>
+    <a href="#" id="tabUsers" onclick="showTab('users');return false;">👥 用户管理</a>
 </div>
 
-<!-- 用户管理面板（默认隐藏） -->
-<div id="userPanel" style="display:none; max-width:900px; margin:16px auto; padding:0 16px;">
-    <div style="background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06); padding:20px;">
+<!-- 用户管理（默认隐藏） -->
+<div id="userPanel" style="display:none;">
+    <div id="userPanelInner">
         <h3 style="margin-top:0;">👥 用户管理</h3>
-        <div id="userTableBody">加载中...</div>
+        <div id="userTableBody">点击"用户管理"加载...</div>
     </div>
 </div>
 
-<!-- 原有的配送优化系统（完整保留） -->
-<div id="deliverySystem">
-    {% include "delivery/index_content.html" ignore missing %}
+<!-- ★ 原有配送优化系统（直接内嵌 delivery/index.html 的 content 部分） -->
+<div id="dispatchPanel">
+<div class="dashboard">
+    <div class="control-panel">
+        <h2>⚙️ 控制面板</h2>
+        <div class="param-group">
+            <h3>🗺️ 地图与地点管理</h3>
+            <div class="btn-group-h">
+                <button class="btn btn-info btn-sm" onclick="loadGraphInfo()">📡 加载路网</button>
+                <button class="btn btn-purple btn-sm" onclick="initPOIs()">🏗️ 初始化地点</button>
+                <button class="btn btn-teal btn-sm" onclick="loadPOIs()">🔄 刷新</button>
+            </div>
+            <div id="poiStats" class="poi-stats" style="display:none;"></div>
+            <div id="poiList" class="poi-list"></div>
+            <details class="add-poi-details">
+                <summary>➕ 添加新地点</summary>
+                <div class="add-poi-form">
+                    <label>名称: <input type="text" id="poiName" placeholder="如：自习室A"></label>
+                    <label>类型: <select id="poiType"><option value="dormitory">🏠 宿舍</option><option value="teaching">🏫 教学楼</option><option value="library">📚 图书馆</option><option value="sports">🏀 体育场馆</option><option value="other">📍 其他</option></select></label>
+                    <label>描述: <input type="text" id="poiDesc" placeholder="可选"></label>
+                    <p class="hint">💡 在地图上<b>点击</b>选择位置：</p>
+                    <label>节点编号: <input type="number" id="poiNodeIndex" placeholder="点击地图自动填入" min="1"></label>
+                    <div class="coord-row">
+                        <label>纬度: <input type="text" id="poiLat" placeholder="—" readonly></label>
+                        <label>经度: <input type="text" id="poiLon" placeholder="—" readonly></label>
+                    </div>
+                    <button class="btn btn-success btn-sm" onclick="createPOI()" style="width:100%;margin-top:6px;">✅ 确认添加</button>
+                </div>
+            </details>
+        </div>
+        <div class="param-group">
+            <h3>📝 下单</h3>
+            <label>配送目的地: <select id="orderDest" style="width:100%;padding:5px;font-size:12px;border:1px solid #ddd;border-radius:4px;margin-top:3px;"><option value="">-- 加载地点后选择 --</option></select></label>
+            <p class="hint">💡 选择已知地点，或在地图上点击后手动下单</p>
+            <label>节点编号(地图点击): <input type="number" id="orderNodeIndex" placeholder="可选" min="1"></label>
+            <div class="btn-group-h" style="margin-top:8px;">
+                <button class="btn btn-success btn-sm" onclick="createOrder()">🛒 手动下单</button>
+                <button class="btn btn-warning btn-sm" onclick="randomOrders()">🎲 随机下单</button>
+            </div>
+            <label style="margin-top:4px;">随机数量: <input type="number" id="numRandomOrders" value="10" min="1" max="50" style="width:60px;float:right;"></label>
+        </div>
+        <div class="param-group">
+            <h3>📋 订单列表 <span id="pendingBadge" class="pending-badge" style="display:none;">0</span></h3>
+            <div class="btn-group-h">
+                <button class="btn btn-teal btn-sm" onclick="loadOrders()">🔄 刷新订单</button>
+                <select id="orderFilter" onchange="loadOrders()" style="padding:4px;font-size:12px;border:1px solid #ddd;border-radius:4px;">
+                    <option value="">全部</option><option value="pending">⏳ 待接单</option><option value="accepted">✅ 已接单</option><option value="delivering">🚴 配送中</option><option value="delivered">📦 已送达</option>
+                </select>
+            </div>
+            <div id="orderList" class="order-list"><p style="font-size:12px;color:#888;">暂无订单</p></div>
+        </div>
+        <div class="param-group">
+            <h3>🧬 优化参数</h3>
+            <label>骑手数量: <input type="number" id="numCouriers" value="4" min="1" max="10"></label>
+            <label>种群大小: <input type="number" id="popSize" value="200" min="10" max="1000"></label>
+            <label>进化代数: <input type="number" id="generations" value="500" min="10" max="2000"></label>
+            <label>变异率: <input type="number" id="mutRate" value="0.2" min="0" max="1" step="0.05"></label>
+            <label>交叉率: <input type="number" id="crossRate" value="0.8" min="0" max="1" step="0.05"></label>
+            <label><input type="checkbox" id="use2opt" checked> 启用 2-opt</label>
+        </div>
+        <div class="btn-group">
+            <button id="btnOptimize" class="btn btn-success" onclick="runOptimize()">🚀 优化 pending 订单</button>
+        </div>
+        <div id="batchPanel" class="param-group" style="display:none;">
+            <h3>🚚 配送模拟（批次 #<span id="currentBatchId"></span>）</h3>
+            <div class="btn-group-h">
+                <button class="btn btn-sm btn-info" onclick="batchAdvance('picked_up')">🍽️ 全部取餐</button>
+                <button class="btn btn-sm btn-warning" onclick="batchAdvance('delivering')">🚴 全部出发</button>
+                <button class="btn btn-sm btn-success" onclick="batchAdvance('delivered')">📦 全部送达</button>
+                <div style="margin-top: 8px;">
+                    <button class="btn btn-sm btn-danger" onclick="startScheduler()" style="width:100%;background:#E74C3C;">🔴 启动动态调度</button>
+                </div>
+            </div>
+        </div>
+        <div id="dynamicPanel" class="param-group" style="display:none; border: 2px solid #E74C3C; background: #FFF5F5;">
+            <h3>🔴 动态调度模式 <span id="schedulerBadge" style="background:#E74C3C;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">LIVE</span></h3>
+            <div class="btn-group-h" style="margin-bottom: 8px;">
+                <button class="btn btn-sm btn-warning" onclick="schedulerAdvanceAll()">⏩ 全部前进一步</button>
+                <button class="btn btn-sm btn-danger" onclick="stopScheduler()" style="background:#E74C3C;">⏹️ 停止调度</button>
+            </div>
+            <p class="hint">💡 骑手已出发！可以继续下单</p>
+            <div class="btn-group-h" style="margin-top: 6px;">
+                <button class="btn btn-sm btn-success" onclick="dynamicCreateOrder()">🆕 实时下单</button>
+                <button class="btn btn-sm btn-info" onclick="dynamicRandomOrders()">🎲 实时随机加单</button>
+            </div>
+            <label style="margin-top:4px;">实时加单数: <input type="number" id="numDynamicOrders" value="5" min="1" max="20" style="width:60px;float:right;"></label>
+            <div id="schedulerStats" style="margin-top: 10px; padding: 8px; background: #f8f8f8; border-radius: 6px; font-size: 12px;">
+                <div>📌 动态插入: <strong id="statInserted">0</strong> 单</div>
+                <div>🔄 全局微调: <strong id="statReoptimize">0</strong> 次</div>
+                <div>⏱️ 上次微调: <strong id="statLastTime">-</strong></div>
+            </div>
+            <div id="frozenStatus" style="margin-top:8px;"></div>
+        </div>
+        <div id="statusPanel" class="status-panel"><p>👆 先「加载路网」→「初始化地点」→ 再下单</p></div>
+        <div id="courierPanel" class="courier-panel" style="display:none;">
+            <h3>🚴 骑手分配结果</h3>
+            <div id="courierList"></div>
+        </div>
+    </div>
+    <div class="map-area">
+        <div id="mapHint" class="map-hint">💡 点击地图查看节点编号</div>
+        <div id="map" style="height: 550px; border-radius: 10px;"></div>
+        <div class="map-legend">
+            <span>🍽️ 食堂</span> <span>🏠 宿舍</span> <span>🏫 教学楼</span> <span>📚 图书馆</span> <span>🏀 体育馆</span> <span>📍 其他</span> <span>🔴 订单</span>
+        </div>
+        <div class="chart-area" style="display:none;" id="chartContainer">
+            <h3>📈 GA 收敛曲线</h3>
+            <canvas id="convergenceChart" height="200"></canvas>
+        </div>
+    </div>
 </div>
-
-<!-- 如果 index_content.html 不存在，回退到直接 include 原页面的 content 部分 -->
-{% if not self.deliverySystem %}
-{% endif %}
+</div>
 
 {% endblock %}
 
 {% block scripts %}
 <script>
-// 加载统计数据
-fetch('/admin/api/stats')
-    .then(r => r.json())
-    .then(data => {
-        if (!data.success) return;
-        const d = data.data;
-        document.getElementById('sUsers').textContent = d.total_users;
-        document.getElementById('sRiders').textContent = d.total_riders;
-        document.getElementById('sOrders').textContent = d.total_orders;
-        document.getElementById('sPending').textContent = d.pending_orders;
-        document.getElementById('sDelivering').textContent = d.delivering_orders;
-        document.getElementById('sDelivered').textContent = d.delivered_orders;
-    });
+// 加载统计
+fetch('/admin/api/stats').then(r=>r.json()).then(data=>{
+    if(!data.success) return;
+    const d=data.data;
+    document.getElementById('sUsers').textContent=d.total_users;
+    document.getElementById('sRiders').textContent=d.total_riders;
+    document.getElementById('sOrders').textContent=d.total_orders;
+    document.getElementById('sPending').textContent=d.pending_orders;
+    document.getElementById('sDelivering').textContent=d.delivering_orders;
+    document.getElementById('sDelivered').textContent=d.delivered_orders;
+});
 
-// 用户管理
+// Tab 切换
+function showTab(tab) {
+    document.getElementById('dispatchPanel').style.display = tab==='dispatch'?'block':'none';
+    document.getElementById('userPanel').style.display = tab==='users'?'block':'none';
+    document.getElementById('tabDispatch').className = tab==='dispatch'?'active':'';
+    document.getElementById('tabUsers').className = tab==='users'?'active':'';
+    if(tab==='users') loadUserList();
+}
+
 function loadUserList() {
-    document.getElementById('userPanel').style.display = 'block';
-    fetch('/admin/api/users')
-        .then(r => r.json())
-        .then(data => {
-            if (!data.success) return;
-            const body = document.getElementById('userTableBody');
-            body.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-                + '<tr style="background:#f8f8f8;"><th style="padding:8px;text-align:left;">ID</th><th>用户名</th><th>手机号</th><th>角色</th><th>状态</th><th>操作</th></tr>'
-                + data.data.map(u => `
-                    <tr style="border-bottom:1px solid #eee;">
-                        <td style="padding:8px;">${u.id}</td>
-                        <td>${u.username}</td>
-                        <td>${u.phone}</td>
-                        <td>${u.role === 'admin' ? '🔴 管理员' : u.role === 'rider' ? '🔵 骑手' : '🟢 用户'}</td>
-                        <td>${u.is_active ? '✅ 正常' : '⛔ 禁用'}</td>
-                        <td>${u.role !== 'admin' ? `<button onclick="toggleUser(${u.id})" style="padding:4px 10px;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:12px;">${u.is_active ? '禁用' : '启用'}</button>` : '-'}</td>
-                    </tr>`).join('')
-                + '</table>';
-        });
+    fetch('/admin/api/users').then(r=>r.json()).then(data=>{
+        if(!data.success) return;
+        document.getElementById('userTableBody').innerHTML =
+            '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+            +'<tr style="background:#f8f8f8;"><th style="padding:8px;text-align:left;">ID</th><th>用户名</th><th>手机号</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr>'
+            +data.data.map(u=>`<tr style="border-bottom:1px solid #eee;">
+                <td style="padding:8px;">${u.id}</td><td>${u.username}</td><td>${u.phone}</td>
+                <td>${u.role==='admin'?'🔴 管理员':u.role==='rider'?'🔵 骑手':'🟢 用户'}</td>
+                <td>${u.is_active?'✅ 正常':'⛔ 禁用'}</td><td style="font-size:11px;">${u.created_at}</td>
+                <td>${u.role!=='admin'?`<button onclick="toggleUser(${u.id})" style="padding:3px 10px;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:12px;">${u.is_active?'禁用':'启用'}</button>`:'-'}</td>
+            </tr>`).join('')+'</table>';
+    });
 }
 
 function toggleUser(uid) {
-    fetch(`/admin/api/users/${uid}/toggle`, { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            alert(data.message || data.error);
-            loadUserList();
-        });
+    fetch(`/admin/api/users/${uid}/toggle`,{method:'POST'}).then(r=>r.json()).then(data=>{
+        alert(data.message||data.error); loadUserList();
+        // 刷新统计
+        fetch('/admin/api/stats').then(r=>r.json()).then(d=>{if(d.success){document.getElementById('sUsers').textContent=d.data.total_users;}});
+    });
 }
 </script>
 
-<!-- 加载原有的配送系统 JS -->
+<!-- 原有配送系统 JS -->
 <script src="{{ url_for('static', filename='js/delivery.js') }}"></script>
 {% endblock %}

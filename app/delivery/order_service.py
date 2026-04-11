@@ -356,7 +356,94 @@ class OrderService:
             order.is_frozen = True
             db.session.commit()
         return order
+    # ============================================================
+    # ⑧ ★ 新增：用户取消订单
+    # ============================================================
 
+    def cancel_order(self, order_id, user_id):
+        """
+        取消订单（仅限 pending 状态，且只能取消自己的）
+
+        参数：
+          order_id: ���取消的订单 ID
+          user_id:  当前登录用户 ID（安全校验用）
+        """
+        order = Order.query.get(order_id)
+        if not order:
+            raise ValueError('订单不存在')
+        if order.user_id != user_id:
+            raise ValueError('只能取消自己的订单')
+        if order.status != ORDER_PENDING:
+            raise ValueError(f'只能取消待接单的订单，当前状态: {order.status}')
+
+        db.session.delete(order)
+        db.session.commit()
+        return True
+
+    # ============================================================
+    # ⑨ ★ 新增：获取骑手的按路线排序的订单列表
+    # ============================================================
+
+    def get_rider_route_orders(self, courier_db_id, batch_id=None):
+        """
+        获取某骑手的订单，按 GA 优化路线的顺序排列
+
+        逻辑：
+          1. 找到该骑手最新的批次
+          2. 从 batch.optimal_route_json 中读取 courier_details
+          3. 按 order_db_ids 的顺序排列订单
+          4. 如果找不到路线信息，就按创建时间排序（兜底）
+
+        返回：按配送顺序排列的订单列表
+        """
+        import json as json_lib
+
+        # 找到骑手的订单
+        query = Order.query.filter_by(courier_id=courier_db_id)
+        if batch_id:
+            query = query.filter_by(batch_id=batch_id)
+
+        orders = query.all()
+        if not orders:
+            return []
+
+        # 尝试从批次结果中获取路线顺序
+        if not batch_id:
+            # 取最新批次
+            batch_ids = set(o.batch_id for o in orders if o.batch_id)
+            if batch_ids:
+                batch_id = max(batch_ids)
+
+        if batch_id:
+            batch = Batch.query.get(batch_id)
+            if batch and batch.optimal_route_json:
+                try:
+                    result = json_lib.loads(batch.optimal_route_json)
+                    courier_details = result.get('courier_details', {})
+
+                    # courier_details 的 key 是骑手编号字符串 "1","2",...
+                    # 需要找到哪个 key 对应当前骑手
+                    for cid_str, detail in courier_details.items():
+                        order_db_ids = detail.get('order_db_ids', [])
+                        # 检查当前骑手的订单是否在这个分配里
+                        our_order_ids = set(o.id for o in orders)
+                        if our_order_ids & set(order_db_ids):
+                            # 按路线顺序排列
+                            order_map = {o.id: o for o in orders}
+                            sorted_orders = []
+                            for oid in order_db_ids:
+                                if oid in order_map:
+                                    sorted_orders.append(order_map[oid])
+                            # 补上可能不在路线里的订单（动态插入的）
+                            for o in orders:
+                                if o not in sorted_orders:
+                                    sorted_orders.append(o)
+                            return sorted_orders
+                except Exception:
+                    pass
+
+        # 兜底：按创建时间排序
+        return sorted(orders, key=lambda o: o.created_at)
 
 # 全局单例
 order_service = OrderService()
