@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}管理后台 - 校园外卖{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-stats { display: flex; gap: 12px; flex-wrap: wrap; max-width: 900px; margin: 16px auto; padding: 0 16px; }
+    .admin-stat { flex: 1; min-width: 120px; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 16px; text-align: center; }
+    .admin-stat .num { font-size: 28px; font-weight: 700; }
+    .admin-stat .label { font-size: 12px; color: #888; margin-top: 4px; }
+    .admin-tabs { max-width: 900px; margin: 16px auto; padding: 0 16px; }
+    .admin-tabs a { display: inline-block; padding: 8px 18px; background: #f0f0f0; border-radius: 8px; margin-right: 8px; text-decoration: none; color: #333; font-size: 13px; }
+    .admin-tabs a:hover, .admin-tabs a.active { background: #3498DB; color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- 数据概览 -->
+<div class="admin-stats" id="statsRow">
+    <div class="admin-stat"><div class="num" id="sUsers">-</div><div class="label">用户数</div></div>
+    <div class="admin-stat"><div class="num" id="sRiders">-</div><div class="label">骑手数</div></div>
+    <div class="admin-stat"><div class="num" id="sOrders">-</div><div class="label">总订单</div></div>
+    <div class="admin-stat"><div class="num" id="sPending">-</div><div class="label">待接单</div></div>
+    <div class="admin-stat"><div class="num" id="sDelivering">-</div><div class="label">配送中</div></div>
+    <div class="admin-stat"><div class="num" id="sDelivered">-</div><div class="label">已送达</div></div>
+</div>
+
+<!-- 功能入口 -->
+<div class="admin-tabs">
+    <a href="#" onclick="return false;" class="active">📊 调度系统</a>
+    <a href="#" onclick="loadUserList(); return false;">👥 用户管理</a>
+</div>
+
+<!-- 用户管理面板（默认隐藏） -->
+<div id="userPanel" style="display:none; max-width:900px; margin:16px auto; padding:0 16px;">
+    <div style="background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06); padding:20px;">
+        <h3 style="margin-top:0;">👥 用户管理</h3>
+        <div id="userTableBody">加载中...</div>
+    </div>
+</div>
+
+<!-- 原有的配送优化系统（完整保留） -->
+<div id="deliverySystem">
+    {% include "delivery/index_content.html" ignore missing %}
+</div>
+
+<!-- 如果 index_content.html 不存在，回退到直接 include 原页面的 content 部分 -->
+{% if not self.deliverySystem %}
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 加载统计数据
+fetch('/admin/api/stats')
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) return;
+        const d = data.data;
+        document.getElementById('sUsers').textContent = d.total_users;
+        document.getElementById('sRiders').textContent = d.total_riders;
+        document.getElementById('sOrders').textContent = d.total_orders;
+        document.getElementById('sPending').textContent = d.pending_orders;
+        document.getElementById('sDelivering').textContent = d.delivering_orders;
+        document.getElementById('sDelivered').textContent = d.delivered_orders;
+    });
+
+// 用户管理
+function loadUserList() {
+    document.getElementById('userPanel').style.display = 'block';
+    fetch('/admin/api/users')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            const body = document.getElementById('userTableBody');
+            body.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+                + '<tr style="background:#f8f8f8;"><th style="padding:8px;text-align:left;">ID</th><th>用户名</th><th>手机号</th><th>角色</th><th>状态</th><th>操作</th></tr>'
+                + data.data.map(u => `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:8px;">${u.id}</td>
+                        <td>${u.username}</td>
+                        <td>${u.phone}</td>
+                        <td>${u.role === 'admin' ? '🔴 管理员' : u.role === 'rider' ? '🔵 骑手' : '🟢 用户'}</td>
+                        <td>${u.is_active ? '✅ 正常' : '⛔ 禁用'}</td>
+                        <td>${u.role !== 'admin' ? `<button onclick="toggleUser(${u.id})" style="padding:4px 10px;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:12px;">${u.is_active ? '禁用' : '启用'}</button>` : '-'}</td>
+                    </tr>`).join('')
+                + '</table>';
+        });
+}
+
+function toggleUser(uid) {
+    fetch(`/admin/api/users/${uid}/toggle`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            alert(data.message || data.error);
+            loadUserList();
+        });
+}
+</script>
+
+<!-- 加载原有的配送系统 JS -->
+<script src="{{ url_for('static', filename='js/delivery.js') }}"></script>
+{% endblock %}

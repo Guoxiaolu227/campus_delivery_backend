@@ -30,11 +30,14 @@ from app.delivery.poi_service import poi_service
 # 在已有 import 之后加：
 from app.delivery.scheduler import scheduler
 
+from flask_login import login_required
+
 # ================================================================
 # 路网信息（不变）
 # ================================================================
 
 @bp.route('/graph_info', methods=['GET'])
+@login_required
 def get_graph_info():
     try:
         graph = graph_service.get_graph()
@@ -54,6 +57,7 @@ def get_graph_info():
 
 
 @bp.route('/nodes', methods=['GET'])
+@login_required
 def get_nodes():
     try:
         positions = graph_service.get_node_positions()
@@ -71,6 +75,7 @@ def get_nodes():
 # ================================================================
 
 @bp.route('/orders/create', methods=['POST'])
+@login_required
 def create_order():
     """
     手动下单
@@ -96,6 +101,7 @@ def create_order():
 
 
 @bp.route('/orders/random', methods=['POST'])
+@login_required
 def generate_orders():
     """
     随机生成订单（写入数据库）
@@ -132,6 +138,7 @@ def generate_orders():
 
 
 @bp.route('/orders', methods=['GET'])
+@login_required
 def get_orders():
     """
     获取订单列表
@@ -175,6 +182,7 @@ def get_orders():
 
 
 @bp.route('/orders/<int:order_id>/status', methods=['POST'])
+@login_required
 def update_order_status(order_id):
     """
     推进单个订单的状态
@@ -194,6 +202,7 @@ def update_order_status(order_id):
 
 
 @bp.route('/orders/batch_status', methods=['POST'])
+@login_required
 def batch_update_status():
     """
     批量推进状态（整个批次一键推进）
@@ -216,6 +225,7 @@ def batch_update_status():
 # ================================================================
 
 @bp.route('/optimize', methods=['POST'])
+@login_required
 def optimize_route():
     """
     批次优化（★ 阶段2核心改造）
@@ -376,6 +386,7 @@ def optimize_route():
 
 
 @bp.route('/batches', methods=['GET'])
+@login_required
 def get_batches():
     """获取所有批次"""
     try:
@@ -390,6 +401,7 @@ def get_batches():
 # ================================================================
 
 @bp.route('/pois', methods=['GET'])
+@login_required
 def get_pois():
     try:
         poi_type = request.args.get('type', None)
@@ -408,6 +420,7 @@ def get_pois():
 
 
 @bp.route('/pois', methods=['POST'])
+@login_required
 def create_poi():
     try:
         data = request.get_json()
@@ -425,6 +438,7 @@ def create_poi():
 
 
 @bp.route('/pois/<int:poi_id>', methods=['PUT'])
+@login_required
 def update_poi(poi_id):
     try:
         data = request.get_json()
@@ -437,6 +451,7 @@ def update_poi(poi_id):
 
 
 @bp.route('/pois/<int:poi_id>', methods=['DELETE'])
+@login_required
 def delete_poi(poi_id):
     try:
         result = poi_service.delete_poi(poi_id)
@@ -448,6 +463,7 @@ def delete_poi(poi_id):
 
 
 @bp.route('/pois/init', methods=['POST'])
+@login_required
 def init_pois():
     try:
         added = poi_service.init_pois()
@@ -461,6 +477,7 @@ def init_pois():
 
 
 @bp.route('/nearest_node', methods=['GET'])
+@login_required
 def find_nearest_node():
     try:
         lat = float(request.args.get('lat'))
@@ -475,6 +492,7 @@ def find_nearest_node():
 # ================================================================
 
 @bp.route('/scheduler/start', methods=['POST'])
+@login_required
 def start_scheduler():
     """
     启动动态调度模式（在批次优化完成后调用）
@@ -529,6 +547,7 @@ def start_scheduler():
 
 
 @bp.route('/scheduler/insert_order', methods=['POST'])
+@login_required
 def scheduler_insert_order():
     """
     动态插入新订单（骑手出发后的实时下单）
@@ -598,6 +617,7 @@ def scheduler_insert_order():
 
 
 @bp.route('/scheduler/state', methods=['GET'])
+@login_required
 def get_scheduler_state():
     """
     获取调度器当前状态（前端轮询用）
@@ -661,6 +681,7 @@ def get_scheduler_state():
 
 
 @bp.route('/scheduler/advance', methods=['POST'])
+@login_required
 def scheduler_advance():
     """
     模拟骑手前进（冻结指针推进）
@@ -696,6 +717,7 @@ def scheduler_advance():
 
 
 @bp.route('/scheduler/stop', methods=['POST'])
+@login_required
 def stop_scheduler():
     """停止动态调度"""
     try:

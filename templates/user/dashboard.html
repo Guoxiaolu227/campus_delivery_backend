@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}下单 - 校园外卖{% endblock %}
+
+{% block extra_css %}
+<style>
+    .user-container { max-width: 500px; margin: 20px auto; padding: 0 16px; }
+    .section-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 16px; }
+    .section-card h3 { margin-top: 0; font-size: 16px; }
+    .poi-select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 12px; }
+    .order-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #2ECC71, #27AE60); color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+    .order-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(46,204,113,0.3); }
+    .order-item { padding: 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; font-size: 13px; }
+    .order-item .status { float: right; }
+    .empty-tip { text-align: center; color: #aaa; padding: 30px; font-size: 14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="user-container">
+
+    <!-- 快速下单 -->
+    <div class="section-card">
+        <h3>🛒 我要下单</h3>
+        <select id="poiSelect" class="poi-select">
+            <option value="">加载中...</option>
+        </select>
+        <button class="order-btn" onclick="submitOrder()">确认下单</button>
+        <div id="orderMsg" style="margin-top:10px; font-size:13px;"></div>
+    </div>
+
+    <!-- 我的订单 -->
+    <div class="section-card">
+        <h3>📋 我的订单 <button onclick="loadMyOrders()" style="float:right;border:none;background:none;color:#3498DB;cursor:pointer;font-size:13px;">🔄 刷新</button></h3>
+        <div id="myOrderList">
+            <div class="empty-tip">加载中...</div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 加载可选地点
+fetch('/user/pois')
+    .then(r => r.json())
+    .then(data => {
+        const sel = document.getElementById('poiSelect');
+        sel.innerHTML = '<option value="">-- 选择配送目的地 --</option>';
+        if (data.success) {
+            data.data.forEach(p => {
+                sel.innerHTML += `<option value="${p.id}">📍 ${p.name}</option>`;
+            });
+        }
+    });
+
+// 下单
+function submitOrder() {
+    const poiId = document.getElementById('poiSelect').value;
+    if (!poiId) { alert('请选择配送目的地'); return; }
+
+    fetch('/user/create_order', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ to_poi_id: parseInt(poiId) })
+    })
+    .then(r => r.json())
+    .then(data => {
+        const msg = document.getElementById('orderMsg');
+        if (data.success) {
+            msg.innerHTML = '<span style="color:#27AE60;">✅ 下单成功！</span>';
+            loadMyOrders();
+        } else {
+            msg.innerHTML = `<span style="color:#E74C3C;">❌ ${data.error}</span>`;
+        }
+    });
+}
+
+// 加载我的订单
+function loadMyOrders() {
+    fetch('/user/my_orders')
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('myOrderList');
+            if (!data.success || data.data.length === 0) {
+                list.innerHTML = '<div class="empty-tip">暂无订单，去下一单吧 🍜</div>';
+                return;
+            }
+            list.innerHTML = data.data.map(o => `
+                <div class="order-item">
+                    <strong>#${o.id}</strong> → ${o.address}
+                    <span class="status">${o.status_label}</span>
+                    <div style="color:#999;font-size:11px;margin-top:4px;">下单时间: ${o.created_at}</div>
+                </div>
+            `).join('');
+        });
+}
+
+// 页面加载时自动获取订单
+loadMyOrders();
+</script>
+{% endblock %}

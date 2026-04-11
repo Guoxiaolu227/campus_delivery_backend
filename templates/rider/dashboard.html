@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}骑手工作台 - 校园外卖{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rider-container { max-width: 500px; margin: 20px auto; padding: 0 16px; }
+    .section-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 16px; }
+    .section-card h3 { margin-top: 0; font-size: 16px; }
+    .task-item { padding: 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; }
+    .task-item .address { font-weight: 600; }
+    .task-item .meta { color: #999; font-size: 11px; margin-top: 4px; }
+    .status-btn { padding: 6px 14px; border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; margin-top: 6px; }
+    .btn-pickup { background: #3498DB; }
+    .btn-depart { background: #F39C12; }
+    .btn-deliver { background: #2ECC71; }
+    .empty-tip { text-align: center; color: #aaa; padding: 30px; font-size: 14px; }
+    .stat-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .stat-box { flex: 1; background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center; }
+    .stat-box .num { font-size: 24px; font-weight: 700; color: #333; }
+    .stat-box .label { font-size: 11px; color: #999; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rider-container">
+
+    <!-- 统计 -->
+    <div class="stat-row">
+        <div class="stat-box">
+            <div class="num" id="statDelivering">-</div>
+            <div class="label">配送中</div>
+        </div>
+        <div class="stat-box">
+            <div class="num" id="statDone">-</div>
+            <div class="label">已完成</div>
+        </div>
+        <div class="stat-box">
+            <div class="num" id="statTotal">-</div>
+            <div class="label">总任务</div>
+        </div>
+    </div>
+
+    <!-- 配送任务 -->
+    <div class="section-card">
+        <h3>🚴 我的配送任务 <button onclick="loadTasks()" style="float:right;border:none;background:none;color:#3498DB;cursor:pointer;font-size:13px;">🔄 刷新</button></h3>
+        <div id="taskList">
+            <div class="empty-tip">加载中...</div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function loadTasks() {
+    fetch('/rider/my_deliveries')
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('taskList');
+            if (!data.success || data.data.length === 0) {
+                list.innerHTML = '<div class="empty-tip">暂无配送任务，等待管理员分配 ☕</div>';
+                document.getElementById('statDelivering').textContent = '0';
+                document.getElementById('statDone').textContent = '0';
+                document.getElementById('statTotal').textContent = '0';
+                return;
+            }
+
+            // 统计
+            let delivering = 0, done = 0;
+            data.data.forEach(o => {
+                if (o.status === 'delivered') done++;
+                else if (o.status !== 'pending') delivering++;
+            });
+            document.getElementById('statDelivering').textContent = delivering;
+            document.getElementById('statDone').textContent = done;
+            document.getElementById('statTotal').textContent = data.data.length;
+
+            // 渲染任务列表
+            list.innerHTML = data.data.map(o => {
+                let btnHtml = '';
+                if (o.status === 'accepted')
+                    btnHtml = `<button class="status-btn btn-pickup" onclick="advanceStatus(${o.id},'picked_up')">🍽️ 已取餐</button>`;
+                else if (o.status === 'picked_up')
+                    btnHtml = `<button class="status-btn btn-depart" onclick="advanceStatus(${o.id},'delivering')">🚴 出发配送</button>`;
+                else if (o.status === 'delivering')
+                    btnHtml = `<button class="status-btn btn-deliver" onclick="advanceStatus(${o.id},'delivered')">📦 已送达</button>`;
+
+                return `
+                    <div class="task-item">
+                        <div class="address">#${o.id} → ${o.address}</div>
+                        <div class="meta">${o.status_label} | 下单 ${o.created_at}</div>
+                        ${btnHtml}
+                    </div>`;
+            }).join('');
+        });
+}
+
+function advanceStatus(orderId, newStatus) {
+    fetch('/rider/update_status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ order_id: orderId, status: newStatus })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) loadTasks();
+        else alert(data.error);
+    });
+}
+
+loadTasks();
+</script>
+{% endblock %}

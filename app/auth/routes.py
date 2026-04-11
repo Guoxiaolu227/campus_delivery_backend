@@ -57,11 +57,18 @@ def login():
 
         flash(f'欢迎回来，{user.username}！', 'success')
 
-        # 跳转到登录前想访问的页面（如果有的话），否则跳首页
+        # 跳转到登录前想访问的页面（如果有的话），否则按角色跳转
         next_page = request.args.get('next')
         if next_page:
             return redirect(next_page)
-        return redirect(url_for('main.index'))
+
+        # ★ 按角色跳转到对应端
+        if user.role == 'admin':
+            return redirect(url_for('admin.dashboard'))
+        elif user.role == 'rider':
+            return redirect(url_for('rider.dashboard'))
+        else:
+            return redirect(url_for('user.dashboard'))
 
     # GET 请求：显示登录页面
     return render_template('auth/login.html')
@@ -123,7 +130,11 @@ def register():
         # ---------- 自动登录 ----------
         login_user(user, remember=True)
         flash(f'注册成功！欢迎 {username}', 'success')
-        return redirect(url_for('main.index'))
+        # ★ 按角色跳转
+        if user.role == 'rider':
+            return redirect(url_for('rider.dashboard'))
+        else:
+            return redirect(url_for('user.dashboard'))
 
     # GET 请求：显示注册页面
     return render_template('auth/register.html')
